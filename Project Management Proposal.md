@@ -43,8 +43,8 @@ The pipeline construction is to be discussed with the whole team to be able to a
 
 - Any time time a document is created, it needs to be added to "Name_of_files.md" with a short description of what is that.
 - Every time there is a commit, use this structure:
-prefix: Comment
-The prefix should be feat for new functionalities or new files created, fix for bugs correction, while the coomment should be just a few lines defining what was done.
+prefix: Comment    
+The prefix should be feat for new functionalities or new files created, fix for bugs correction, while the comment should be just a few lines defining what was done.
 
 
 
