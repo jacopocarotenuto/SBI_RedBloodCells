@@ -38,3 +38,13 @@ A document is to be created for each high-level task to keep track of progress.
 Logs and metrics are to be implemented whenever possible.
 Everything should be done in a reproducible way and have the appriopriate level of verbosity available to the user.
 The pipeline construction is to be discussed with the whole team to be able to adapt and be coordinated on the interfaces between every part of the pipeline.fdc
+
+## GIT HUB INSTRUMENT 
+
+- Any time time a document is created, it needs to be added to "Name_of_files.md" with a short description of what is that.
+- Every time there is a commit, use this structure:
+prefix: Comment
+The prefix should be feat for new functionalities or new files created, fix for bugs correction, while the coomment should be just a few lines defining what was done.
+
+
+
