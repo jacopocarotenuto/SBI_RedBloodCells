@@ -49,6 +49,19 @@ plot(sol, idxs = (1, 2, 3))
 #####- ----------
 
 function f(du, u, p, t)
+    mu, tau, d, k = p
     du[1] = mu*(- (k*u[1] + d*u[1]^3) + u[2])
     du[2] = -u[2]/tau
 end
+
+function g(du, u, p, t)
+    du[1] = 1.0
+    du[2] = 1.0
+end
+
+u0 = [0.0, 0.0]
+tspan = (0.0, 5000.0)
+p = [1.0, 1.0, 0.1, 1.0]
+prob = SDEProblem(f, g, u0, tspan, p)
+sol = solve(prob, dt = 0.01)
+plot(sol, idxs = 1)
