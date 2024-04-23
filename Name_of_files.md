@@ -20,6 +20,7 @@ Jacopo's Experiments
   /sbi-logs/SNPE_C   
   /DampenedOscillatore.ipynb:   
   /SDE_test.jl:   
+  /computing.ipynb : some tests on computation to simulate the dynamics (cpu vs gpu implementation)
 
 .gitignore 
 
