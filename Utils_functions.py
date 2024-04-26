@@ -1,7 +1,8 @@
 # Load the minimum required library to run the functions
 from numba import jit
-from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int64
+from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int64, mean, ceil, where, log2, max, min
 from numpy.random import randn
+from numpy.fft import fft, ifft
 
 @jit(nopython = True)
 def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
@@ -59,3 +60,36 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
             sampling_counter = int64(1)
     
     return x_trace, (x, y, f) # Check if this is right
+
+def corr(x,y,nmax,dt=False):
+    '''fft, pad 0s, non partial'''
+
+    assert len(x)==len(y)
+
+    n=len(x)
+    # pad 0s to 2n-1
+    ext_size=2*n-1
+    # nearest power of 2
+    fsize=2**np.ceil(np.log2(ext_size)).astype('int')
+
+    xp=x-np.mean(x)
+    yp=y-np.mean(y)
+
+    # do fft and ifft
+    cfx=np.fft.fft(xp,fsize)
+    cfy=np.fft.fft(yp,fsize)
+    if dt != False:
+        freq = np.fft.fftfreq(n, d=dt)
+        idx = np.where((freq<-1/(2*dt))+(freq>1/(2*dt)))[0]
+        
+        cfx[idx]=0
+        cfy[idx]=0
+        
+    sf=cfx.conjugate()*cfy
+    corr=np.fft.ifft(sf).real
+    corr=corr/n
+
+    return corr[:nmax]
+
+def normalize_numpy(array):
+    return (array - np.min(array)) / (np.max(array) - np.min(array))

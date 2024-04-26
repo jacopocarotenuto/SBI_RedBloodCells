@@ -4,17 +4,15 @@ from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int6
 from numpy.random import randn
 
 @jit(nopython = True)
-def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
+def Simulator_noGPU(dt, DeltaT, TotalT, theta, i_state = None, debug = False):
+    
     
     time_steps_amount = int64(TotalT/dt) # Number of steps
     sampled_point_amount = int64(TotalT/DeltaT) # Number of sampled points
     sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
     
-    # Aggiugnere controllo sul TotalT effettivo a fine simulazione
-    # Aggiungere controllo sul sampling_delta_time_steps per sanity check
-    # Controllare che sampled_point_amount*sampling_delta_time_steps = time_steps_amount
+    n_sim = theta[0].shape[0]
     
-        
     # Unpack Parameters
     mu_x = theta[0]
     mu_y = theta[1]
@@ -25,6 +23,11 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
     eps = theta[6]
     D_x = theta[7]
     D_y = theta[8]
+    
+    
+    if len(set([x.shape for x in theta])) != 1:
+        raise Exception("Parameters dimension are not all equal. Detected number of different parameters: ", n_sim)
+    
     
     # Handle initial state
     if i_state is None:
@@ -59,3 +62,42 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
             sampling_counter = int64(1)
     
     return x_trace, (x, y, f) # Check if this is right
+
+
+
+def CheckParameters(dt, DeltaT, TotalT, theta):
+    time_steps_amount = int64(TotalT/dt) # Number of steps
+    sampled_point_amount = int64(TotalT/DeltaT) # Number of sampled points
+    sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
+    n_sim = theta[0].shape[0]
+    # Aggiugnere controllo sul TotalT effettivo a fine simulazione
+    # Aggiungere controllo sul sampling_delta_time_steps per sanity check
+    # Controllare che sampled_point_amount*sampling_delta_time_steps = time_steps_amount
+    
+    print(f"Your Integration Time (dt) is {dt:.2E} seconds")
+    print(f"Your Sampling Time (Delta) is {DeltaT:.2E} seconds, corresponding to a {1/DeltaT:.2f}Hz sampling frequency")
+    print(f"Your Total Simulation Time is {TotalT:.2E} seconds")
+    print(f"Your Number of Simulated Trajectories is {n_sim:.2E}")
+    print(f"The amount of total time steps is {time_steps_amount:.2E}")
+    print(f"The amount of sampled points is {sampled_point_amount:.2E}")
+    print(f"The gap between two sampled points is {sampling_delta_time_steps:.1E} time steps")
+    passed_sanity_checks = True
+    print("---- SANITY CHECKS ----")
+    if TotalT != DeltaT*sampled_point_amount:
+        print(f"WARNING: TotalT is {TotalT}s, but DeltaT*sampled_point_amount is {DeltaT*sampled_point_amount}s")
+        passed_sanity_checks = False
+    if sampled_point_amount*sampling_delta_time_steps != time_steps_amount:
+        print(f"WARNING: sampled_point_amount*sampling_delta_time_steps is {sampled_point_amount*sampling_delta_time_steps}, but time_steps_amount is {time_steps_amount}")
+        passed_sanity_checks = False
+    if time_steps_amount*dt != TotalT:
+        print(f"WARNING: time_steps_amount*dt is {time_steps_amount*dt}, but TotalT is {TotalT}")
+        passed_sanity_checks = False
+    if dt*sampling_delta_time_steps != DeltaT:
+        print(f"WARNING: dt*sampling_delta_time_steps is {dt*sampling_delta_time_steps}, but DeltaT is {DeltaT}")
+        passed_sanity_checks = False
+    if len(set([x.shape for x in theta])) != 1:
+        raise Exception("Parameters dimension are not all equal. Detected number of different parameters: ", n_sim)
+    if passed_sanity_checks:
+        print("All checks passed")
+        
+    return None
