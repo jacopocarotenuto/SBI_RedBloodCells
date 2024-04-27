@@ -1,6 +1,7 @@
 # Load the minimum required library to run the functions
 from numba import jit
-from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int64, mean, ceil, where, log2, max, min, median, var, log, array, sum
+from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, vstack, concatenate
+from numpy import int64, mean, ceil, where, log2, max, min, median, var, log, array, sum
 from numpy.random import randn, uniform
 from numpy.fft import fft, ifft, fftfreq
 from torch import Tensor
@@ -9,7 +10,7 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.signal import welch
 import torch
 
-#@jit(nopython = True)
+@jit(nopython = True)
 def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
     
     time_steps_amount = int64(TotalT/dt) # Number of steps
@@ -204,3 +205,82 @@ def get_theta_from_prior(prior_limits, n_sim):
     prior_box = utils.torchutils.BoxUniform(low=torch.tensor(prior_limits[:, 0]), high=torch.tensor(prior_limits[:, 1]))
     
     return theta, theta_torch, prior_box
+
+
+def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t, t_corr):
+    """
+    - k_psd: number of segments to divide the signal for the psd calculation (same for x, f)
+    
+    """
+    n_sim = x_trace.shape[0]
+    sampled_point_amount = x_trace.shape[1]
+    theta_numpy = array(theta)
+    Sample_frequency = 1/DeltaT
+
+    for i in range(n_sim):
+        single_x_trace = x_trace[i]
+        single_f_trace = f_trace[i]
+        theta_i = theta_numpy[:, 1]
+
+        summary_i = []
+
+        for stat in list_stat: 
+            corr_dependency = False
+            psdx_dependency = False
+            psdf_dependency = False
+            
+            if stat == "Cxx" or stat == "Cfx" or stat == "Cff":
+                Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)  
+                corr_dependency = True
+
+                if stat == "Cxx": summary_i.append(Cxx[idx_corr])
+                if stat == "Cfx": summary_i.append(Cfx[idx_corr])
+                if stat == "Cff": summary_i.append(Cff[idx_corr])
+            
+            if stat == "s_redx":
+                if corr_dependency == False:
+                    Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
+                    corr_dependency = True
+                S_redx = stat_s_redx(Cxx, t_corr, t, theta_i)
+                summary_i.append(S_redx)
+            
+            if stat == "s_redf":
+                if corr_dependency == False:
+                    Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
+                    corr_dependency = True
+                S_redf = stat_s_redf(Cfx, t_corr, t, theta_i)
+                summary_i.append(S_redf)
+
+            if stat == "psdx":
+                psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
+                psdx_dependency = True
+                summary_i.append(psdx)
+
+            if stat == "psdf":
+                psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
+                psdf_dependency = True
+                summary_i.append(psdf)
+
+            if stat == "ts_psdx":
+                if psdx_dependency == False:
+                    psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
+                    psdx_dependency = True
+                ts_psdx = stat_timeseries(psdx)
+                summary_i.append(ts_psdx)
+            
+            if stat == "ts_psdf":
+                if psdf_dependency == True:
+                    psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
+                    psdf_dependency = False
+                ts_psdf = stat_timeseries(psdf)
+                summary_i.append(ts_psdf)
+
+        summary_i = concatenate(summary_i, axis=0)
+        
+        if i == 0:
+            summary = summary_i.copy()
+        else:
+            summary = vstack((summary, summary_i))
+    
+    summary = torch.from_numpy(array(summary)).to(torch.float32)
+    return summary
