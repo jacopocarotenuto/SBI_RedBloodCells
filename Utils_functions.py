@@ -1,11 +1,13 @@
 # Load the minimum required library to run the functions
 from numba import jit
-from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int64, mean, ceil, where, log2, max, min
-from numpy.random import randn
+from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int64, mean, ceil, where, log2, max, min, median, var, log, array, sum
+from numpy.random import randn, uniform
 from numpy.fft import fft, ifft, fftfreq
 from torch import Tensor
 from sbi import utils as utils
 from scipy.integrate import cumulative_trapezoid
+from scipy.signal import welch
+import torch
 
 #@jit(nopython = True)
 def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
@@ -150,13 +152,14 @@ def prior_func(num_sim):
     return prior
 
 
-def stat_corr(single_x_trace, single_f_trace, DeltaT):
+def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
     sampled_point_amount = single_x_trace.shape[0]
+    idx_corr = where((t>0)*(t<t_corr))[0]
     Cxx= corr(single_x_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each x trace
     Cfx = corr(single_f_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the cross-correllation for each x and f trace
     Cff = corr(single_f_trace, single_f_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each f trace    
 
-    return Cxx, Cfx, Cff
+    return Cxx, Cfx, Cff, idx_corr
 
 def stat_s_redx(Cxx, t_corr, t, theta_i):
     mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
@@ -177,15 +180,27 @@ def stat_s_redf(Cfx, t_corr, t, theta_i):
     
     return S_redf
   
-def stat_psd(single_trace, k):
+def stat_psd(single_trace, k, Sample_frequency, sampled_point_amount):
     frequencies, psd = welch(single_trace, fs=Sample_frequency, nperseg=sampled_point_amount/k)
     return psd
 
 def stat_timeseries(single_timeseries):
-    statistics_functions = [mean, var, median, max, min, lambda x: -sum(x*log(x)), lambda x: frequencies_x[x.argmax()]]
+    statistics_functions = [mean, var, median, max, min, lambda x: -sum(x*log(x))]
     s = zeros((len(statistics_functions)))
 
     for j, func in enumerate(statistics_functions):
         s[j] = func(single_timeseries)
 
     return s
+
+# Helper function to get the priors
+def get_theta_from_prior(prior_limits, n_sim):
+    # Get parameters drawn from the prior
+    theta = [uniform(prior_limits[i][0], prior_limits[i][1], size=(n_sim, 1)) for i in range(len(prior_limits))]
+    theta_torch = torch.from_numpy(array(theta)[:,:,0].T).to(torch.float32)
+
+    # Get the torch prior box (used in sbi)
+    prior_limits = array(prior_limits)
+    prior_box = utils.torchutils.BoxUniform(low=torch.tensor(prior_limits[:, 0]), high=torch.tensor(prior_limits[:, 1]))
+    
+    return theta, theta_torch, prior_box
