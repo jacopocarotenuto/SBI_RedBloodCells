@@ -1,4 +1,7 @@
-# Load the minimum required library to run the functions
+
+
+############## LIBRARIES ##############
+
 from numba import jit
 from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, vstack, concatenate
 from numpy import int64, mean, ceil, where, log2, max, min, median, var, log, array, sum
@@ -10,9 +13,28 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.signal import welch
 import torch
 
+
+
+############## SIMULATOR AND TIME VARIABLES ##############
+
 @jit(nopython = True)
 def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
-    
+    '''
+    Simulates the system for a given set of parameters.
+
+    INPUT
+    dt: integration time
+    DeltaT: sampling time
+    TotalT: total simulation time
+    n_sim: number of simulated trajectories
+    theta: parameters
+    i_state: initial state
+
+    OUTPUT
+    x_trace: x trace signal
+    f_trace: f trace signal
+    (x, y, f): state variables
+    '''
     time_steps_amount = int64(TotalT/dt) # Number of steps
     sampled_point_amount = int64(TotalT/DeltaT) # Number of sampled points
     sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
@@ -70,41 +92,16 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
 
     return x_trace, f_trace, (x, y, f) # Check if this is right
 
-def corr(x,y,nmax,dt=False):
-    '''fft, pad 0s, non partial'''
-
-    assert len(x)==len(y), 'x and y must have the same length'
-
-    n=len(x)
-    # pad 0s to 2n-1
-    ext_size=2*n-1
-    # nearest power of 2
-    fsize=2**ceil(log2(ext_size)).astype('int')
-
-    xp=x-mean(x)
-    yp=y-mean(y)
-
-    # do fft and ifft
-    cfx=fft(xp,fsize)
-    cfy=fft(yp,fsize)
-    if dt != False:
-        freq = fftfreq(n, d=dt)
-        idx = where((freq<-1/(2*dt))+(freq>1/(2*dt)))[0]
-        
-        cfx[idx]=0
-        cfy[idx]=0
-        
-    sf=cfx.conjugate()*cfy
-    corr=ifft(sf).real
-    corr=corr/n
-
-    return corr[:nmax]
-
-def normalize_numpy(array):
-    return (array - min(array)) / (max(array) - min(array))
-
-
 def CheckParameters(dt, DeltaT, TotalT, theta):
+    '''
+    Checks the variables and parameters for the simulation.
+
+    INPUT
+    dt: integration time
+    DeltaT: sampling time
+    TotalT: total simulation time
+    theta: parameters
+    '''
     time_steps_amount = int64(TotalT/dt) # Number of steps
     sampled_point_amount = int64(TotalT/DeltaT) # Number of sampled points
     sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
@@ -141,19 +138,69 @@ def CheckParameters(dt, DeltaT, TotalT, theta):
         
     return None
 
-def prior_func(num_sim):
-    
-    # Define the lower and upper bounds for each parameter
-    low_bounds = Tensor([1.5e4, 1e4, 3e-3, 1.5e-2, 1e-3, 2e-2, 0.5, 5.5, 1])
-    high_bounds = Tensor([4e4, 140e4, 16e-3, 30e-2, 6e-3, 20e-2, 6, 15.5, 530])
+############## CORRELATION ##############
 
-    # Create PyTorch prior
-    prior = utils.BoxUniform(low=low_bounds, high=high_bounds)
+def corr(x,y,nmax,dt=False):
+    '''
+    Performs the cross correlation between two single-input signals x and y.
 
-    return prior
+    INPUT
+    x: input signal 1
+    y: input signal 2
+    nmax: maximum number of lags
+    dt: time step (default=False)
 
+    OUTPUT
+    corr: cross-correlation between x and y
+    '''
+
+    assert len(x)==len(y), 'x and y must have the same length'
+
+    n=len(x)
+    # pad 0s to 2n-1
+    ext_size=2*n-1
+    # nearest power of 2
+    fsize=2**ceil(log2(ext_size)).astype('int')
+
+    xp=x-mean(x)
+    yp=y-mean(y)
+
+    # do fft and ifft
+    cfx=fft(xp,fsize)
+    cfy=fft(yp,fsize)
+    if dt != False:
+        freq = fftfreq(n, d=dt)
+        idx = where((freq<-1/(2*dt))+(freq>1/(2*dt)))[0]
+        
+        cfx[idx]=0
+        cfy[idx]=0
+        
+    sf=cfx.conjugate()*cfy
+    corr=ifft(sf).real
+    corr=corr/n
+
+    return corr[:nmax]
+
+
+############## INTEGRATION AND SUMMARY STATISTICS ##############
 
 def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
+    '''
+    Computes the autocorrelation and cross-correlation for a single x and f trace signal.
+
+    INPUT
+    singles_x_trace: single x trace signal
+    singles_f_trace: single f trace signal
+    DeltaT: sampling time
+    t: time array
+    t_corr: maximum time for the correlation
+
+    OUTPUT
+    Cxx: autocorrelation x signal
+    Cfx: cross-correlation xf signal
+    Cff: autocorrelation f signal
+    '''
+
     sampled_point_amount = single_x_trace.shape[0]
     idx_corr = where((t>0)*(t<t_corr))[0]
     Cxx= corr(single_x_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each x trace
@@ -163,6 +210,18 @@ def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
     return Cxx, Cfx, Cff, idx_corr
 
 def stat_s_redx(Cxx, t_corr, t, theta_i):
+    '''
+    Computes the reduced energy production for a single x trace signal.
+
+    INPUT
+    Cxx: autocorrelation signal
+    t_corr: maximum time for the correlation
+    t: time array
+    theta_i: parameters
+
+    OUTPUT
+    S_red: reduced x energy production
+    '''
     mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
     S1 = cumulative_trapezoid(Cxx, x=t, axis=-1, initial=0)
     S1 = cumulative_trapezoid(S1, x=t, axis=-1, initial=0)
@@ -172,6 +231,18 @@ def stat_s_redx(Cxx, t_corr, t, theta_i):
     return S_red
 
 def stat_s_redf(Cfx, t_corr, t, theta_i):
+    '''
+    Computes the reduced energy production for a xf trace signal.
+
+    INPUT
+    Cxx: autocorrelation signal
+    t_corr: maximum time for the correlation
+    t: time array
+    theta_i: parameters
+
+    OUTPUT
+    S_red: reduced f energy production
+    '''
     mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
     idx_corr = where((t>0)*(t<t_corr))[0]
     S2f = cumulative_trapezoid(Cfx - Cfx[0], x=t, axis=-1, initial=0)
@@ -182,10 +253,31 @@ def stat_s_redf(Cfx, t_corr, t, theta_i):
     return S_redf
   
 def stat_psd(single_trace, k, Sample_frequency, sampled_point_amount):
+    '''
+    Computes the power spectral density for a single trace signal.
+
+    INPUT
+    single_trace: single trace signal
+    k: number of segments to divide the signal
+    Sample_frequency: sampling frequency
+    sampled_point_amount: number of sampled points
+
+    OUTPUT
+    psd: power spectral density
+    '''
     frequencies, psd = welch(single_trace, fs=Sample_frequency, nperseg=sampled_point_amount/k)
     return psd
 
 def stat_timeseries(single_timeseries):
+    '''
+    Computes the summary statistics for a single time series signal.
+
+    INPUT
+    single_timeseries: single time series signal
+
+    OUTPUT
+    s: summary statistics
+    '''
     statistics_functions = [mean, var, median, max, min, lambda x: -sum(x*log(x))]
     s = zeros((len(statistics_functions)))
 
@@ -194,8 +286,20 @@ def stat_timeseries(single_timeseries):
 
     return s
 
-# Helper function to get the priors
+
 def get_theta_from_prior(prior_limits, n_sim):
+    '''
+    Get parameters drawn from the prior.
+
+    INPUT
+    prior_limits: prior limits
+    n_sim: number of simulated trajectories
+
+    OUTPUT
+    theta: parameters drawn from the prior
+    theta_torch: parameters drawn from the prior in torch format
+    prior_box: torch prior box distribution
+    '''
     # Get parameters drawn from the prior
     theta = [uniform(prior_limits[i][0], prior_limits[i][1], size=(n_sim, 1)) for i in range(len(prior_limits))]
     theta_torch = torch.from_numpy(array(theta)[:,:,0].T).to(torch.float32)
@@ -208,10 +312,22 @@ def get_theta_from_prior(prior_limits, n_sim):
 
 
 def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t, t_corr):
-    """
-    - k_psd: number of segments to divide the signal for the psd calculation (same for x, f)
-    
-    """
+    '''
+    Selects the summary statistics to compute.
+
+    INPUT
+    list_stat: list of summary statistics
+    x_trace: x trace signal
+    f_trace: f trace signal
+    theta: parameters
+    DeltaT: sampling time
+    k_psd: number of segments to divide the signal
+    t: time array
+    t_corr: maximum time for the correlation
+
+    OUTPUT
+    summary: summary statistics
+    '''
     n_sim = x_trace.shape[0]
     sampled_point_amount = x_trace.shape[1]
     theta_numpy = array(theta)
