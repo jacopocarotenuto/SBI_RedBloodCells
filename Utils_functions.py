@@ -3,8 +3,10 @@ from numba import jit
 from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int64, mean, ceil, where, log2, max, min
 from numpy.random import randn
 from numpy.fft import fft, ifft, fftfreq
+from torch import Tensor
+from sbi import utils as utils
 
-@jit(nopython = True)
+#@jit(nopython = True)
 def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
     
     time_steps_amount = int64(TotalT/dt) # Number of steps
@@ -134,3 +136,14 @@ def CheckParameters(dt, DeltaT, TotalT, theta):
         print("All checks passed")
         
     return None
+
+def prior_func(num_sim):
+    
+    # Define the lower and upper bounds for each parameter
+    low_bounds = Tensor([1.5e4, 1e4, 3e-3, 1.5e-2, 1e-3, 2e-2, 0.5, 5.5, 1])
+    high_bounds = Tensor([4e4, 140e4, 16e-3, 30e-2, 6e-3, 20e-2, 6, 15.5, 530])
+
+    # Create PyTorch prior
+    prior = utils.BoxUniform(low=low_bounds, high=high_bounds)
+
+    return prior
