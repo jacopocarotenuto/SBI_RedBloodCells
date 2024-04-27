@@ -5,6 +5,7 @@ from numpy.random import randn
 from numpy.fft import fft, ifft, fftfreq
 from torch import Tensor
 from sbi import utils as utils
+from scipy.integrate import cumulative_trapezoid
 
 #@jit(nopython = True)
 def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
@@ -147,3 +148,44 @@ def prior_func(num_sim):
     prior = utils.BoxUniform(low=low_bounds, high=high_bounds)
 
     return prior
+
+
+def stat_corr(single_x_trace, single_f_trace, DeltaT):
+    sampled_point_amount = single_x_trace.shape[0]
+    Cxx= corr(single_x_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each x trace
+    Cfx = corr(single_f_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the cross-correllation for each x and f trace
+    Cff = corr(single_f_trace, single_f_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each f trace    
+
+    return Cxx, Cfx, Cff
+
+def stat_s_redx(Cxx, t_corr, t, theta_i):
+    mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
+    S1 = cumulative_trapezoid(Cxx, x=t, axis=-1, initial=0)
+    S1 = cumulative_trapezoid(S1, x=t, axis=-1, initial=0)
+    idx_corr = where((t>0)*(t<t_corr))[0]
+    S_red = ((Cxx[0]-Cxx[idx_corr])+((mu_x*k_x)**2)*S1[idx_corr])/(D_x*t[idx_corr]) # compute the reduced energy production
+
+    return S_red
+
+def stat_s_redf(Cfx, t_corr, t, theta_i):
+    mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
+    idx_corr = where((t>0)*(t<t_corr))[0]
+    S2f = cumulative_trapezoid(Cfx - Cfx[0], x=t, axis=-1, initial=0)
+    S3f = cumulative_trapezoid(Cfx, x=t, axis=-1, initial=0)
+    S3f = -mu_x*k_x*cumulative_trapezoid(S3f, x=t, axis=-1, initial=0)
+    S_redf = 1-(S2f[idx_corr]+S3f[idx_corr])/(D_x*t[idx_corr]) # the energy production is to to the fluctuation-dissipation theorem
+    
+    return S_redf
+  
+def stat_psd(single_trace, k):
+    frequencies, psd = welch(single_trace, fs=Sample_frequency, nperseg=sampled_point_amount/k)
+    return psd
+
+def stat_timeseries(single_timeseries):
+    statistics_functions = [mean, var, median, max, min, lambda x: -sum(x*log(x)), lambda x: frequencies_x[x.argmax()]]
+    s = zeros((len(statistics_functions)))
+
+    for j, func in enumerate(statistics_functions):
+        s[j] = func(single_timeseries)
+
+    return s
