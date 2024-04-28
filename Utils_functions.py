@@ -69,6 +69,7 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
     
     x_trace = zeros((n_sim, sampled_point_amount), dtype = float32)
     f_trace = zeros((n_sim, sampled_point_amount), dtype = float32)
+    y_trace = zeros((n_sim, sampled_point_amount), dtype = float32)
 
     sampling_counter = int64(1)
     
@@ -87,10 +88,11 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
         if sampling_counter == sampling_delta_time_steps:
             x_trace[:, int(t/sampling_delta_time_steps)] = x[:,0]
             f_trace[:, int(t/sampling_delta_time_steps)] = f[:,0]
-            
+            y_trace[:, int(t/sampling_delta_time_steps)] = y[:,0]
+
             sampling_counter = int64(1)
 
-    return x_trace, f_trace, (x, y, f) # Check if this is right
+    return x_trace, f_trace, y_trace, (x, y, f) # Check if this is right
 
 def CheckParameters(dt, DeltaT, TotalT, theta):
     '''
@@ -137,6 +139,58 @@ def CheckParameters(dt, DeltaT, TotalT, theta):
         print("All checks passed")
         
     return None
+
+def compute_entropy_production(x_trace, y_trace, f_trace, theta, n_sim):
+    '''
+    Compute the entropy production for the given traces and parameters
+    
+    INPUT 
+    x_trace: array of shape (n_sim, sampled_point_amount) with the x traces
+    y_trace: array of shape (n_sim, sampled_point_amount) with the y traces
+    f_trace: array of shape (n_sim, sampled_point_amount) with the f traces
+    theta: array of shape (9, n_sim) with the parameters
+
+    OUTPUT
+    S_mean: mean entropy production
+    Fx: array of shape (n_sim, sampled_point_amount) with the x forces
+    Fy: array of shape (n_sim, sampled_point_amount) with the y forces
+    S_tot: array of shape (n_sim) with the entropy production for each simulation
+    '''
+
+    Fx = []
+    Fy = []
+    S_tot = []
+
+    for i in range (n_sim):
+        # Unpack Parameters
+        mu_x = theta[0][i]
+        mu_y = theta[1][i]
+        k_x = theta[2][i]
+        k_y = theta[3][i]
+        k_int = theta[4][i]
+        tau = theta[5][i]
+        eps = theta[6][i]
+        D_x = theta[7][i]
+        D_y = theta[8][i]
+
+        
+
+        x, y, f = x_trace[i], y_trace[i], f_trace[i]
+
+        # Compute the force
+        F_x = - k_x * x + k_int * y
+        F_y = - k_y * y + k_int * x + f
+        Fx.append(F_x)
+        Fy.append(F_y)
+
+        # Compute the entropy production
+        S_x = sum((x_trace[i][1:] - x_trace[i][:-1]) * F_x[:-1] / D_x)
+        S_y = sum((f_trace[i][1:] - f_trace[i][:-1]) * F_y[:-1] / D_y)
+        S = S_x + S_y
+        S_tot.append(S)
+    
+    S_mean = mean(S_tot)
+    return S_mean, array(Fx), array(Fy), array(S_tot)
 
 ############## CORRELATION ##############
 
