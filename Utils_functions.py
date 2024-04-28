@@ -12,13 +12,26 @@ from sbi import utils as utils
 from scipy.integrate import cumulative_trapezoid
 from scipy.signal import welch
 import torch
-
-
+import time
+from time import gmtime, strftime
 
 ############## SIMULATOR AND TIME VARIABLES ##############
+class SimulationOutput:
+    def __init__(self):
+        self.creation_time = strftime("%d/%m/%Y %H:%M:%S", gmtime())
+    def add_traces(self, x_trace, y_trace, f_trace):
+        self.xtrace = x_trace
+        self.f_trace = f_trace
+        self.y_trace = y_trace
+    def add_parameters(self, theta):
+        self.theta = theta # Theta must be a dictionary! Change simulator to reflect this
+        
+        
+        
+        
 
 @jit(nopython = True)
-def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
+def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None): # Cambiare type of theta to a Dictionary
     '''
     Simulates the system for a given set of parameters.
 
@@ -92,7 +105,7 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None):
 
             sampling_counter = int64(1)
 
-    return x_trace, f_trace, y_trace, (x, y, f) # Check if this is right
+    return x_trace, f_trace, y_trace # Check if this is right
 
 def CheckParameters(dt, DeltaT, TotalT, theta):
     '''
