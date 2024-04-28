@@ -248,6 +248,36 @@ def corr(x,y,nmax,dt=False):
 
     return corr[:nmax]
 
+def compute_entropy_2(theta, n_sim):
+    '''
+    Compute the entropy production for the given parameters
+
+    INPUT
+    theta: array of shape (9, n_sim) with the parameters
+    n_sim: number of simulated trajectories
+
+    OUTPUT
+    sigmas: entropy production for each simulation
+    sigma_mean: mean entropy production
+    '''
+    sigmas = []
+
+    for i in range(n_sim):
+        # Unpack Parameters
+        mu_x = theta[0][i]
+        mu_y = theta[1][i]
+        k_x = theta[2][i]
+        k_y = theta[3][i]
+        k_int = theta[4][i]
+        tau = theta[5][i]
+        eps = theta[6][i]
+
+        sigma = (mu_y * eps**2) / ((1 + k_y * mu_y * tau) - ((k_int ** 2 * mu_x * mu_y * tau ** 2) / (1 + k_x * mu_x * tau)))
+        sigmas.append(sigma)
+
+    sigma_mean = mean(sigmas)
+
+    return sigmas, sigma_mean
 
 ############## INTEGRATION AND SUMMARY STATISTICS ##############
 
