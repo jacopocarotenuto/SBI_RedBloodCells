@@ -1,11 +1,16 @@
-# Load the minimum required library to run the functions
 from numba import jit
 from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int64
 from numpy.random import randn
 import numpy as np
+import time
+import os
+import _pickle as pickle
+
+# IDEAS: Add metrics to simulation pipeline like: average time per batch, total time, etc...
+
 
 @jit(nopython = True)
-def Simulator_noGPU(dt, DeltaT, TotalT, theta, i_state = None, debug = False):
+def Simulator_noGPU(dt, DeltaT, TotalT, theta, i_state = None):
     
     
     time_steps_amount = int64(TotalT/dt) # Number of steps
@@ -68,9 +73,16 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, i_state = None, debug = False):
 
     return x_trace, f_trace, y_trace # Check if this is right
 
-
-
 def CheckParameters(dt, DeltaT, TotalT, theta):
+    '''
+    Checks the variables and parameters for the simulation.
+
+    INPUT
+    dt: integration time
+    DeltaT: sampling time
+    TotalT: total simulation time
+    theta: parameters
+    '''
     time_steps_amount = int64(TotalT/dt) # Number of steps
     sampled_point_amount = int64(TotalT/DeltaT) # Number of sampled points
     sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
@@ -106,3 +118,65 @@ def CheckParameters(dt, DeltaT, TotalT, theta):
         print("All checks passed")
         
     return None
+
+class SimulationPipeline():
+    def __init__(self, batch_size: int, total_sim: int, simulator_args: dict, prior_limits: dict, check_parameters: bool = False):
+        self.batch_size = batch_size
+        self.total_sim = total_sim
+        self.simulator_args = simulator_args
+        self.prior_limits = prior_limits
+        self.total_batches = total_sim // batch_size
+        if total_sim != self.total_batches * batch_size:
+            print(f"Actually computing {self.total_batches * batch_size} simulations instead of {total_sim} simulations")
+        self.generator = self.create_generator()
+        if check_parameters:
+            CheckParameters(**simulator_args, theta = self._get_new_theta_batch())
+        _, _, _ = Simulator_noGPU(dt = 1, DeltaT = 1, TotalT = 1,theta = self._get_new_theta_batch())
+        
+    def _get_new_theta_batch(self):
+        return [np.random.uniform(self.prior_limits[i][0], self.prior_limits[i][1], size=(self.batch_size, 1)) for i in self.prior_limits]
+    
+    def _simulate_batch(self, theta):
+        x_trace, y_trace, f_trace = Simulator_noGPU(theta = theta, **self.simulator_args)
+        return x_trace, y_trace, f_trace
+
+    def create_generator(self):
+        def generator():
+            for i in range(self.total_batches):
+                theta = self._get_new_theta_batch()
+                start = time.time()
+                x_trace, y_trace, f_trace = self._simulate_batch(theta)
+                end = time.time()
+                print(f"Simulated batch {i + 1} of {self.total_batches} at {time.strftime('%H:%M:%S of %Y-%m-%d')} in {end - start:.2f} seconds\r",end="")
+                yield {"theta": theta, "x_trace": x_trace, "y_trace": y_trace, "f_trace": f_trace, "n_sim": self.batch_size, "time_of_creation": time.strftime("%Y%m%d-%H%M%S")}
+        
+        return generator
+    
+    def _save_batch(self, sim):
+        simulation_folder = "Simulation"
+        today_folder = time.strftime("%Y%m%d")
+
+        if not os.path.exists(simulation_folder):
+            os.makedirs(simulation_folder)
+
+        today_folder_path = os.path.join(simulation_folder, today_folder)
+        if not os.path.exists(today_folder_path):
+            os.makedirs(today_folder_path)
+            
+        file_name = os.path.join(today_folder_path, f"{sim['time_of_creation']}_{sim['n_sim']}sims.pkl")    
+        # Save the batch
+        with open(file_name, "wb") as f:
+            pickle.dump(sim, f, protocol=2)
+        #print(f"Saved batch to {file_name}")
+        return None
+    
+    def start_pipeline(self):
+        print(f"Starting simulation pipeline at {time.strftime('%Y%m%d-%H%M%S')} with {self.total_sim} simulations in batches of size {self.batch_size}")
+        start = time.time()
+        for sim in self.generator():
+            self._save_batch(sim)
+        end = time.time()
+        print(f"Finished simulating {self.total_sim} simulations at {time.strftime('%H:%M:%S of %Y-%m-%d')} in {end - start:.2f} seconds")
+    
+    def __str__(self):
+        return f"SimulationPipeline with {self.total_sim} simulations in batches of size {self.batch_size}"

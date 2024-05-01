@@ -14,49 +14,20 @@ from scipy.signal import welch
 import torch
 import time
 from time import gmtime, strftime
+import numpy as np
 
 ############## SIMULATOR AND TIME VARIABLES ##############
-class SimulationOutput:
-    def __init__(self):
-        self.creation_time = strftime("%d/%m/%Y %H:%M:%S", gmtime())
-    def add_traces(self, x_trace, y_trace, f_trace):
-        self.xtrace = x_trace
-        self.f_trace = f_trace
-        self.y_trace = y_trace
-    def add_parameters(self, theta):
-        self.theta = theta # Theta must be a dictionary! Change simulator to reflect this
-        
-        
-        
-        
 
 @jit(nopython = True)
-def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None): # Cambiare type of theta to a Dictionary
-    '''
-    Simulates the system for a given set of parameters.
-
-    INPUT
-    dt: integration time
-    DeltaT: sampling time
-    TotalT: total simulation time
-    n_sim: number of simulated trajectories
-    theta: parameters
-    i_state: initial state
-
-    OUTPUT
-    x_trace: x trace signal
-    f_trace: f trace signal
-    (x, y, f): state variables
-    '''
+def Simulator_noGPU(dt, DeltaT, TotalT, theta, i_state = None):
+    
+    
     time_steps_amount = int64(TotalT/dt) # Number of steps
     sampled_point_amount = int64(TotalT/DeltaT) # Number of sampled points
     sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
     
-    # Aggiugnere controllo sul TotalT effettivo a fine simulazione
-    # Aggiungere controllo sul sampling_delta_time_steps per sanity check
-    # Controllare che sampled_point_amount*sampling_delta_time_steps = time_steps_amount
+    n_sim = theta[0].shape[0]
     
-        
     # Unpack Parameters
     mu_x = theta[0]
     mu_y = theta[1]
@@ -67,6 +38,11 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None): # Cambiar
     eps = theta[6]
     D_x = theta[7]
     D_y = theta[8]
+    
+    
+    if len(set([x.shape for x in theta])) != 1:
+        raise Exception("Parameters dimension are not all equal. Detected number of different parameters: ", n_sim)
+    
     
     # Handle initial state
     if i_state is None:
@@ -79,7 +55,6 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None): # Cambiar
         x, y, f = i_state
     
     # Initialize x_trace array
-    
     x_trace = zeros((n_sim, sampled_point_amount), dtype = float32)
     f_trace = zeros((n_sim, sampled_point_amount), dtype = float32)
     y_trace = zeros((n_sim, sampled_point_amount), dtype = float32)
@@ -93,9 +68,9 @@ def Simulator_noGPU(dt, DeltaT, TotalT, n_sim, theta, i_state = None): # Cambiar
     # CHECK: Benchmark the version with the explicit dx, dy, df and the one with the x, y, f arrays with the calculation in the assigment
     
     for t in arange(time_steps_amount - 1):
-        x[:,] = x[:,] + mu_x*(- k_x * x[:,] + k_int*y[:,])*dt                +          sqrt(2*mu_x*D_x*dt)     *randn(n_sim,1)
-        y[:,] = y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt        +          sqrt(2*mu_y*D_y*dt)     *randn(n_sim,1)
-        f[:,] = f[:,] + -(f[:,]/tau)*dt                                   +          sqrt(2*eps**2*dt/tau)   *randn(n_sim,1)
+        x[:,] = x[:,] + mu_x*(- k_x * x[:,] + k_int*y[:,])*dt                +          sqrt(2*mu_x*D_x*dt)  *   np.random.randn(n_sim,1)
+        y[:,] = y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt        +          sqrt(2*mu_y*D_y*dt)     *   np.random.randn(n_sim,1)
+        f[:,] = f[:,] + -(f[:,]/tau)*dt                                   +          sqrt(2*eps**2*dt/tau)   *   np.random.randn(n_sim,1)
 
         sampling_counter = sampling_counter + 1
         if sampling_counter == sampling_delta_time_steps:
@@ -383,7 +358,6 @@ def stat_timeseries(single_timeseries):
 
     return s
 
-
 def get_theta_from_prior(prior_limits, n_sim):
     '''
     Get parameters drawn from the prior.
@@ -406,7 +380,6 @@ def get_theta_from_prior(prior_limits, n_sim):
     prior_box = utils.torchutils.BoxUniform(low=torch.tensor(prior_limits[:, 0]), high=torch.tensor(prior_limits[:, 1]))
     
     return theta, theta_torch, prior_box
-
 
 def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t, t_corr):
     '''
