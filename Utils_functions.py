@@ -256,6 +256,13 @@ def compute_entropy_2(theta, n_sim):
 
 ############## INTEGRATION AND SUMMARY STATISTICS ##############
 
+def hermite(x, index):
+    std_x = np.std(x,axis=1)
+    z = np.divide(x.T,std_x).T
+    i = len(index)-1
+    return np.mean(np.divide((np.exp(-z**2/2)*np.polynomial.hermite.hermval(x, index)*(2**i*
+            np.math.factorial(i)*np.sqrt(np.pi))**-0.5).T,np.sqrt(std_x)).T,axis=1)
+
 def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
     '''
     Computes the autocorrelation and cross-correlation for a single x and f trace signal.
@@ -356,6 +363,20 @@ def stat_timeseries(single_timeseries):
     for j, func in enumerate(statistics_functions):
         s[j] = func(single_timeseries)
 
+    return s
+
+def stat_hermite(x, index):
+    '''
+    Computes the Hermite statistics for a single trace signal.
+
+    INPUT
+    x: single trace signal
+    index: Hermite index
+
+    OUTPUT
+    s: Hermite statistics
+    '''
+    s = hermite(x, index)
     return s
 
 def get_theta_from_prior(prior_limits, n_sim):
@@ -460,6 +481,14 @@ def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t,
                     psdf_dependency = False
                 ts_psdf = stat_timeseries(psdf)
                 summary_i.append(ts_psdf)
+
+            if stat == "hermite":
+                hermite_stat = stat_hermite(single_x_trace, [1])
+                summary_i.append(hermite_stat)
+                hermite_stat = stat_hermite(single_x_trace, [0,0,1])
+                summary_i.append(hermite_stat)
+                hermite_stat = stat_hermite(single_x_trace, [0,0,0,0,1])
+                summary_i.append(hermite_stat)
 
         summary_i = concatenate(summary_i, axis=0)
         
