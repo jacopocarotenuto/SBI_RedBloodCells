@@ -427,7 +427,7 @@ def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t,
     for i in range(n_sim):
         single_x_trace = x_trace[i]
         single_f_trace = f_trace[i]
-        theta_i = theta_numpy[:, 1]
+        theta_i = theta_numpy[:, i]
 
         summary_i = []
 
