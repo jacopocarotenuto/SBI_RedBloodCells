@@ -10,13 +10,13 @@ import _pickle as pickle
 
 
 @jit(nopython = True)
-def Simulator_noGPU(dt, DeltaT, TotalT, theta, i_state = None):
+def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = None):
     
     
     time_steps_amount = int64(TotalT/dt) # Number of steps
-    sampled_point_amount = int64(TotalT/DeltaT) # Number of sampled points
+    sampled_point_amount = int64((TotalT - transient_time)/DeltaT) # Number of sampled points
     sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
-    
+    transient_time_steps = int64(transient_time/dt)
     n_sim = theta[0].shape[0]
     
     # Unpack Parameters
@@ -34,6 +34,8 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, i_state = None):
     if len(set([x.shape for x in theta])) != 1:
         raise Exception("Parameters dimension are not all equal. Detected number of different parameters: ", n_sim)
     
+    if transient_time > TotalT:
+        raise Exception("Transient time is greater than Total Time")
     
     # Handle initial state
     if i_state is None:
@@ -65,11 +67,13 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, i_state = None):
 
         sampling_counter = sampling_counter + 1
         if sampling_counter == sampling_delta_time_steps:
-            x_trace[:, int(t/sampling_delta_time_steps)] = x[:,0]
-            f_trace[:, int(t/sampling_delta_time_steps)] = f[:,0]
-            y_trace[:, int(t/sampling_delta_time_steps)] = y[:,0]
-
             sampling_counter = int64(1)
+            if t >= transient_time_steps:
+                x_trace[:, int((t - transient_time_steps)/sampling_delta_time_steps)] = x[:,0]
+                f_trace[:, int((t - transient_time_steps)/sampling_delta_time_steps)] = f[:,0]
+                y_trace[:, int((t - transient_time_steps)/sampling_delta_time_steps)] = y[:,0]
+
+            
 
     return x_trace, f_trace, y_trace # Check if this is right
 
