@@ -235,7 +235,7 @@ def compute_entropy_2(theta, n_sim):
     sigmas: entropy production for each simulation
     sigma_mean: mean entropy production
     '''
-    sigmas = []
+    sigmas = np.array([])
 
     for i in range(n_sim):
         # Unpack Parameters
@@ -248,7 +248,7 @@ def compute_entropy_2(theta, n_sim):
         eps = theta[6][i]
 
         sigma = (mu_y * eps**2) / ((1 + k_y * mu_y * tau) - ((k_int ** 2 * mu_x * mu_y * tau ** 2) / (1 + k_x * mu_x * tau)))
-        sigmas.append(sigma)
+        sigmas = np.append(sigmas, sigma)
 
     sigma_mean = mean(sigmas)
 
