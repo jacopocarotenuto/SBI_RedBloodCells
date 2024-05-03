@@ -165,6 +165,9 @@ class SimulationPipeline():
             
         file_name = os.path.join(today_folder_path, f"{sim['time_of_creation']}_{sim['n_sim']}sims.pkl")    
         # Save the batch
+        if os.path.exists(file_name):
+            file_name = os.path.join(today_folder_path, f"{sim['time_of_creation']}_{sim['n_sim']}sims_1.pkl")
+        
         with open(file_name, "wb") as f:
             pickle.dump(sim, f, protocol=2)
         #print(f"Saved batch to {file_name}")
@@ -180,3 +183,35 @@ class SimulationPipeline():
     
     def __str__(self):
         return f"SimulationPipeline with {self.total_sim} simulations in batches of size {self.batch_size}"
+    
+class SimulationLoader():
+    def __init__(self, day_folder = None) -> None:
+        self.simulation_folder = "Simulation"
+        if day_folder is None:
+            self.today_folder = time.strftime("%Y%m%d")
+        else:
+            self.today_folder = day_folder
+        self.today_folder = time.strftime("%Y%m%d")
+        self.today_folder_path = os.path.join(self.simulation_folder, self.today_folder)
+        self.simulation_files = [os.path.join(self.today_folder_path, i) for i in os.listdir(self.today_folder_path)]
+    
+    def load_all_simulation(self):
+        for file in self.simulation_files:
+            with open(file, "rb") as f:
+                sim = pickle.load(f)
+                print("Loaded simulation from ", file)
+            yield sim
+    
+    def load_n_simulations(self, n):
+        for file in self.simulation_files[:n]:
+            with open(file, "rb") as f:
+                sim = pickle.load(f)
+                print("Loaded simulation from ", file)
+            yield sim
+    
+    def load_n_random_simulations(self,n):
+        for file in np.random.choice(self.simulation_files, n):
+            with open(file, "rb") as f:
+                sim = pickle.load(f)
+                print("Loaded simulation from ", file)
+            yield sim
