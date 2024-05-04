@@ -5,6 +5,9 @@ import numpy as np
 import time
 import os
 import _pickle as pickle
+import pathos.multiprocessing as multiprocessing
+from pathos.pools import ProcessPool
+import pathos.profile as pr
 
 # IDEAS: Add metrics to simulation pipeline like: average time per batch, total time, etc...
 
@@ -166,11 +169,12 @@ class SimulationPipeline():
         today_folder_path = os.path.join(simulation_folder, today_folder)
         if not os.path.exists(today_folder_path):
             os.makedirs(today_folder_path)
-            
-        file_name = os.path.join(today_folder_path, f"{sim['time_of_creation']}_{sim['n_sim']}sims.pkl")    
+        
+        
+        file_name = os.path.join(today_folder_path, f"{sim['time_of_creation']}_{sim['n_sim']}sims_process"+str(pr.process_id())+".pkl")    
         # Save the batch
         if os.path.exists(file_name):
-            file_name = os.path.join(today_folder_path, f"{sim['time_of_creation']}_{sim['n_sim']}sims_1.pkl")
+            file_name = os.path.join(today_folder_path, f"{sim['time_of_creation']}_{sim['n_sim']}sims_"+str(round(time.time()))+".pkl")
         
         with open(file_name, "wb") as f:
             pickle.dump(sim, f, protocol=2)
@@ -188,6 +192,27 @@ class SimulationPipeline():
     def __str__(self):
         return f"SimulationPipeline with {self.total_sim} simulations in batches of size {self.batch_size}"
     
+    def start_pipeline_parallel(self, cores = -1):
+        print(f"Starting simulation pipeline at {time.strftime('%Y%m%d-%H%M%S')} with {self.total_sim} simulations in batches of size {self.batch_size}")
+        
+        if cores == -1:
+            cores = multiprocessing.cpu_count()
+        if cores > multiprocessing.cpu_count():
+            print(f"WARNING: You are using {cores} cores, but you have only {multiprocessing.cpu_count()} cores available")
+        pool = ProcessPool(nodes=cores)
+        
+        start = time.time()
+        print(f"Simulating {self.total_batches} batches in parallel...")
+        with ProcessPool(nodes=cores) as pool:
+            pool.map(self._simulate_and_save_batch, [self._get_new_theta_batch()]*self.total_batches)
+        end = time.time()
+        print(f"Finished simulating {self.total_sim} simulations at {time.strftime('%H:%M:%S of %Y-%m-%d')} in {end - start:.2f} seconds")
+    
+    def _simulate_and_save_batch(self, theta):
+        x_trace, y_trace, f_trace = self._simulate_batch(theta)
+        self._save_batch({"theta": theta, "x_trace": x_trace, "y_trace": y_trace, "f_trace": f_trace, "n_sim": self.batch_size, "time_of_creation": time.strftime("%Y%m%d-%H%M%S")})
+
+        
 class SimulationLoader():
     def __init__(self, day_folder = None) -> None:
         self.simulation_folder = "Simulation"
