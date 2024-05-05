@@ -160,7 +160,7 @@ class SimulationPipeline():
         return generator
     
     def _save_batch(self, sim):
-        simulation_folder = "Simulation"
+        simulation_folder = "Simulations"
         today_folder = time.strftime("%Y%m%d")
 
         if not os.path.exists(simulation_folder):

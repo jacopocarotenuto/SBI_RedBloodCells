@@ -26,7 +26,7 @@ High-level tasks:
 [ ] Theoretical understanding of the problem
 [ ] Implement the pipeline in a robust way
 [ ] From the theory get best prior distribution (or create a test to find it)
-[ ] Create the simulator *PERFORMANCE BOTTLENECK*
+[x] Create the simulator *PERFORMANCE BOTTLENECK*
 [ ] Define the best summary statistics (or create a test to find them)
 [ ] Find the best training parameters (or create a test to find them)
 [ ] Build tests for the pipeline with known model
