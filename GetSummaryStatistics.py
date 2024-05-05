@@ -10,19 +10,15 @@ sims_to_get = int(100)
 # Check if the folder "SummaryStatistics" exists
 assert os.path.exists("SummaryStatistics"), "The folder 'SummaryStatistics' does not exist."
 
-# Check if the file "SummaryStatistics/done.pkl" exists
-assert os.path.exists("SummaryStatistics/done.pkl"), "The file 'SummaryStatistics/done.pkl' does not exist."
+# Check if the file "SummaryStatistics/done.txt" exists
+assert os.path.exists("SummaryStatistics/done.txt"), "The file 'SummaryStatistics/done.pkl' does not exist."
 
-# Load the file "SummaryStatistics/done.pkl"
-with open("SummaryStatistics/done.pkl", "rb") as f:
-    done = pickle.load(f)
-
-# Check if the variable "done" is a dictionary
-assert isinstance(done, dict), "File 'done.pkl' is not a dictionary."
-
-# Get the last update of the file "done.pkl"
-last_update = done["LastUpdate"]
-print("The last update of 'done.pkl' was on " + last_update + ".")
+# Load the file "done.txt" and unpack the data
+with open("SummaryStatistics/done.txt", "r") as file:
+    lines = file.readlines()
+last_update = lines[0].strip()
+print("The last update of 'done.txt' was on " + last_update + ".")
+done_list = [line.strip() for line in lines[1:]]
 
 # List the elements of "SummaryStatistics" and get the folders
 files_in_summary_statistics = os.listdir("SummaryStatistics")
@@ -54,7 +50,7 @@ while(processed_simulations < sims_to_get and processed_folders < len(folders_in
     files_to_analyze = os.listdir(os.path.join("Simulations", folder_to_analyze))
 
     # Check if there are new files to analyze
-    file_to_analyze = [f for f in files_to_analyze if f.endswith(".pkl") and f not in done["ProcessedFiles"]]
+    file_to_analyze = [f for f in files_to_analyze if f.endswith(".pkl") and f not in done_list]
     if len(files_to_analyze) > 0:
         # Check if the same folder is in SummaryStatistics
         if folder_to_analyze not in folders_in_summary_statistics:
@@ -65,7 +61,7 @@ while(processed_simulations < sims_to_get and processed_folders < len(folders_in
     # Loop over the files in to analyze
     for file in files_to_analyze:
         # Check if the file is a .pkl and if it is not in "done"
-        if file.endswith(".pkl") and file not in done["ProcessedFiles"]:
+        if file.endswith(".pkl") and file not in done_list:
             # Check if the file already exists in "SummaryStatistics"
             if os.path.exists(os.path.join("SummaryStatistics", folder_to_analyze, "s"+file)):
                 raise Exception("The file " + file + " already exists in 'SummaryStatistics': problem with 'done.pkl'!")
@@ -95,10 +91,13 @@ while(processed_simulations < sims_to_get and processed_folders < len(folders_in
             print("The summary statistics of " + file + " has been saved.")
 
             # Update "done" and update the processed counters
-            done["ProcessedFiles"].append(file)
-            done["LastUpdate"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open("SummaryStatistics/done.pkl", "wb") as f:
-                pickle.dump(done, f)
+            done_list.append(file)
+            last_update = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Open the text file in write mode
+            with open("SummaryStatistics/done.txt", "w") as file:
+                file.write(last_update + "\n")
+                for item in done_list: file.write(item + "\n")  # Add a newline after each item
+            
             processed_simulations += n_sim
             processed_files += 1
             print("Processed " + str(processed_simulations) + " out of " + str(sims_to_get) + " simulations.")
