@@ -79,9 +79,7 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim):
         tau = theta[5][i]
         eps = theta[6][i]
         D_x = theta[7][i]
-        D_y = theta[8][i]
-
-        
+        D_y = theta[8][i]  
 
         x, y, f = x_trace[i], y_trace[i], f_trace[i]
 
@@ -323,7 +321,6 @@ def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics["hermite4"] = stat_hermite(single_x_trace, [0, 0, 0, 0, 1]) 
 
     return summary_statistics
-
 
 
 def select_summary_statistics(summary_statistics, selected_statistics):
