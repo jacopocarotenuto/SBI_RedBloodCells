@@ -182,224 +182,10 @@ def compute_entropy_production(x_trace, y_trace, f_trace, theta, n_sim):
 
 ############## CORRELATION ##############
 
-def corr(x,y,nmax,dt=False):
-    '''
-    Performs the cross correlation between two single-input signals x and y.
 
-    INPUT
-    x: input signal 1
-    y: input signal 2
-    nmax: maximum number of lags
-    dt: time step (default=False)
-
-    OUTPUT
-    corr: cross-correlation between x and y
-    '''
-
-    assert len(x)==len(y), 'x and y must have the same length'
-
-    n=len(x)
-    # pad 0s to 2n-1
-    ext_size=2*n-1
-    # nearest power of 2
-    fsize=2**ceil(log2(ext_size)).astype('int')
-
-    xp=x-mean(x)
-    yp=y-mean(y)
-
-    # do fft and ifft
-    cfx=fft(xp,fsize)
-    cfy=fft(yp,fsize)
-    if dt != False:
-        freq = fftfreq(n, d=dt)
-        idx = where((freq<-1/(2*dt))+(freq>1/(2*dt)))[0]
-        
-        cfx[idx]=0
-        cfy[idx]=0
-        
-    sf=cfx.conjugate()*cfy
-    corr=ifft(sf).real
-    corr=corr/n
-
-    return corr[:nmax]
-
-def compute_entropy_2(theta, n_sim):
-    '''
-    Compute the entropy production for the given parameters
-
-    INPUT
-    theta: array of shape (9, n_sim) with the parameters
-    n_sim: number of simulated trajectories
-
-    OUTPUT
-    sigmas: entropy production for each simulation
-    sigma_mean: mean entropy production
-    '''
-    sigmas = np.array([])
-
-    for i in range(n_sim):
-        # Unpack Parameters
-        mu_x = theta[0][i]
-        mu_y = theta[1][i]
-        k_x = theta[2][i]
-        k_y = theta[3][i]
-        k_int = theta[4][i]
-        tau = theta[5][i]
-        eps = theta[6][i]
-
-        sigma = (mu_y * eps**2) / ((1 + k_y * mu_y * tau) - ((k_int ** 2 * mu_x * mu_y * tau ** 2) / (1 + k_x * mu_x * tau)))
-        sigmas = np.append(sigmas, sigma)
-
-    sigma_mean = mean(sigmas)
-
-    return sigmas, sigma_mean
 
 ############## INTEGRATION AND SUMMARY STATISTICS ##############
 
-def hermite(x, index):
-    std_x = np.std(x,axis=1)
-    z = np.divide(x.T,std_x).T
-    i = len(index)-1
-    return np.mean(np.divide((np.exp(-z**2/2)*np.polynomial.hermite.hermval(x, index)*(2**i*
-            np.math.factorial(i)*np.sqrt(np.pi))**-0.5).T,np.sqrt(std_x)).T,axis=1)
-
-def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
-    '''
-    Computes the autocorrelation and cross-correlation for a single x and f trace signal.
-
-    INPUT
-    singles_x_trace: single x trace signal
-    singles_f_trace: single f trace signal
-    DeltaT: sampling time
-    t: time array
-    t_corr: maximum time for the correlation
-
-    OUTPUT
-    Cxx: autocorrelation x signal
-    Cfx: cross-correlation xf signal
-    Cff: autocorrelation f signal
-    '''
-
-    sampled_point_amount = single_x_trace.shape[0]
-    idx_corr = where((t>0)*(t<t_corr))[0]
-    Cxx= corr(single_x_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each x trace
-    Cfx = corr(single_f_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the cross-correllation for each x and f trace
-    Cff = corr(single_f_trace, single_f_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each f trace    
-
-    return Cxx, Cfx, Cff, idx_corr
-
-
-def stat_corr_single(single_x_trace, DeltaT, t, t_corr):
-    '''
-    Computes the autocorrelation for a single x trace signal.
-
-    INPUT
-    singles_x_trace: single x trace signal
-    DeltaT: sampling time
-    t: time array
-    t_corr: maximum time for the correlation
-
-    OUTPUT
-    Cxx: autocorrelation x signal
-    '''
-
-    sampled_point_amount = single_x_trace.shape[0]
-    idx_corr = where((t>0)*(t<t_corr))[0]
-    Cxx= corr(single_x_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each x trace
-
-    return Cxx, idx_corr
-
-
-def stat_s_redx(Cxx, t_corr, t, theta_i):
-    '''
-    Computes the reduced energy production for a single x trace signal.
-
-    INPUT
-    Cxx: autocorrelation signal
-    t_corr: maximum time for the correlation
-    t: time array
-    theta_i: parameters
-
-    OUTPUT
-    S_red: reduced x energy production
-    '''
-    mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
-    S1 = cumulative_trapezoid(Cxx, x=t, axis=-1, initial=0)
-    S1 = cumulative_trapezoid(S1, x=t, axis=-1, initial=0)
-    idx_corr = where((t>0)*(t<t_corr))[0]
-    S_red = ((Cxx[0]-Cxx[idx_corr])+((mu_x*k_x)**2)*S1[idx_corr])/(D_x*t[idx_corr]) # compute the reduced energy production
-
-    return S_red
-
-def stat_s_redf(Cfx, t_corr, t, theta_i):
-    '''
-    Computes the reduced energy production for a xf trace signal.
-
-    INPUT
-    Cxx: autocorrelation signal
-    t_corr: maximum time for the correlation
-    t: time array
-    theta_i: parameters
-
-    OUTPUT
-    S_red: reduced f energy production
-    '''
-    mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
-    idx_corr = where((t>0)*(t<t_corr))[0]
-    S2f = cumulative_trapezoid(Cfx - Cfx[0], x=t, axis=-1, initial=0)
-    S3f = cumulative_trapezoid(Cfx, x=t, axis=-1, initial=0)
-    S3f = -mu_x*k_x*cumulative_trapezoid(S3f, x=t, axis=-1, initial=0)
-    S_redf = 1-(S2f[idx_corr]+S3f[idx_corr])/(D_x*t[idx_corr]) # the energy production is to to the fluctuation-dissipation theorem
-    
-    return S_redf
-  
-def stat_psd(single_trace, k, Sample_frequency, sampled_point_amount):
-    '''
-    Computes the power spectral density for a single trace signal.
-
-    INPUT
-    single_trace: single trace signal
-    k: number of segments to divide the signal
-    Sample_frequency: sampling frequency
-    sampled_point_amount: number of sampled points
-
-    OUTPUT
-    psd: power spectral density
-    '''
-    frequencies, psd = welch(single_trace, fs=Sample_frequency, nperseg=sampled_point_amount/k)
-    return psd
-
-def stat_timeseries(single_timeseries):
-    '''
-    Computes the summary statistics for a single time series signal.
-
-    INPUT
-    single_timeseries: single time series signal
-
-    OUTPUT
-    s: summary statistics
-    '''
-    statistics_functions = [mean, var, median, max, min, lambda x: -sum(x*log(x))]
-    s = zeros((len(statistics_functions)))
-
-    for j, func in enumerate(statistics_functions):
-        s[j] = func(single_timeseries)
-
-    return s
-
-def stat_hermite(x, index):
-    '''
-    Computes the Hermite statistics for a single trace signal.
-
-    INPUT
-    x: single trace signal
-    index: Hermite index
-
-    OUTPUT
-    s: Hermite statistics
-    '''
-    s = hermite(x, index)
-    return s
 
 def get_theta_from_prior(prior_limits, n_sim):
     '''
@@ -424,100 +210,109 @@ def get_theta_from_prior(prior_limits, n_sim):
     
     return theta, theta_torch, prior_box
 
-def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t, t_corr):
-    '''
-    Selects the summary statistics to compute.
 
-    INPUT
-    list_stat: list of summary statistics
-    x_trace: x trace signal
-    f_trace: f trace signal
-    theta: parameters
-    DeltaT: sampling time
-    k_psd: number of segments to divide the signal
-    t: time array
-    t_corr: maximum time for the correlation
 
-    OUTPUT
-    summary: summary statistics
-    '''
-    n_sim = x_trace.shape[0]
-    sampled_point_amount = x_trace.shape[1]
-    theta_numpy = array(theta)
-    Sample_frequency = 1/DeltaT
 
-    for i in range(n_sim):
-        single_x_trace = x_trace[i]
-        single_f_trace = f_trace[i]
-        theta_i = theta_numpy[:, i]
 
-        summary_i = []
 
-        for stat in list_stat: 
-            corr_dependency = False
-            psdx_dependency = False
-            psdf_dependency = False
+
+
+
+
+# def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t, t_corr):
+#     '''
+#     Selects the summary statistics to compute.
+
+#     INPUT
+#     list_stat: list of summary statistics
+#     x_trace: x trace signal
+#     f_trace: f trace signal
+#     theta: parameters
+#     DeltaT: sampling time
+#     k_psd: number of segments to divide the signal
+#     t: time array
+#     t_corr: maximum time for the correlation
+
+#     OUTPUT
+#     summary: summary statistics
+#     '''
+#     n_sim = x_trace.shape[0]
+#     sampled_point_amount = x_trace.shape[1]
+#     theta_numpy = array(theta)
+#     Sample_frequency = 1/DeltaT
+
+#     for i in range(n_sim):
+#         single_x_trace = x_trace[i]
+#         single_f_trace = f_trace[i]
+#         theta_i = theta_numpy[:, i]
+
+#         summary_i = []
+
+#         for stat in list_stat: 
+#             corr_dependency = False
+#             psdx_dependency = False
+#             psdf_dependency = False
             
-            if stat == "Cxx" or stat == "Cfx" or stat == "Cff":
-                Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)  
-                corr_dependency = True
+#             if stat == "Cxx" or stat == "Cfx" or stat == "Cff":
+#                 Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)  
+#                 corr_dependency = True
 
-                if stat == "Cxx": summary_i.append(Cxx[idx_corr])
-                if stat == "Cfx": summary_i.append(Cfx[idx_corr])
-                if stat == "Cff": summary_i.append(Cff[idx_corr])
+#                 if stat == "Cxx": summary_i.append(Cxx[idx_corr])
+#                 if stat == "Cfx": summary_i.append(Cfx[idx_corr])
+#                 if stat == "Cff": summary_i.append(Cff[idx_corr])
             
-            if stat == "s_redx":
-                if corr_dependency == False:
-                    Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
-                    corr_dependency = True
-                S_redx = stat_s_redx(Cxx, t_corr, t, theta_i)
-                summary_i.append(S_redx)
+#             if stat == "s_redx":
+#                 if corr_dependency == False:
+#                     Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
+#                     corr_dependency = True
+#                 S_redx = stat_s_redx(Cxx, t_corr, t, theta_i)
+#                 summary_i.append(S_redx)
             
-            if stat == "s_redf":
-                if corr_dependency == False:
-                    Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
-                    corr_dependency = True
-                S_redf = stat_s_redf(Cfx, t_corr, t, theta_i)
-                summary_i.append(S_redf)
+#             if stat == "s_redf":
+#                 if corr_dependency == False:
+#                     Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
+#                     corr_dependency = True
+#                 S_redf = stat_s_redf(Cfx, t_corr, t, theta_i)
+#                 summary_i.append(S_redf)
 
-            if stat == "psdx":
-                psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
-                psdx_dependency = True
-                summary_i.append(psdx)
+#             if stat == "psdx":
+#                 psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
+#                 psdx_dependency = True
+#                 summary_i.append(psdx)
 
-            if stat == "psdf":
-                psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
-                psdf_dependency = True
-                summary_i.append(psdf)
+#             if stat == "psdf":
+#                 psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
+#                 psdf_dependency = True
+#                 summary_i.append(psdf)
 
-            if stat == "ts_psdx":
-                if psdx_dependency == False:
-                    psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
-                    psdx_dependency = True
-                ts_psdx = stat_timeseries(psdx)
-                summary_i.append(ts_psdx)
+#             if stat == "ts_psdx":
+#                 if psdx_dependency == False:
+#                     psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
+#                     psdx_dependency = True
+#                 ts_psdx = stat_timeseries(psdx)
+#                 summary_i.append(ts_psdx)
             
-            if stat == "ts_psdf":
-                if psdf_dependency == True:
-                    psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
-                    psdf_dependency = False
-                ts_psdf = stat_timeseries(psdf)
-                summary_i.append(ts_psdf)
+#             if stat == "ts_psdf":
+#                 if psdf_dependency == True:
+#                     psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
+#                     psdf_dependency = False
+#                 ts_psdf = stat_timeseries(psdf)
+#                 summary_i.append(ts_psdf)
 
-            if stat == "hermite":
-                hermite_stat = stat_hermite(single_x_trace, [1])
-                summary_i.append(hermite_stat)
-                hermite_stat = stat_hermite(single_x_trace, [0,0,1])
-                summary_i.append(hermite_stat)
-                hermite_stat = stat_hermite(single_x_trace, [0,0,0,0,1])
-                summary_i.append(hermite_stat)
+#             if stat == "hermite":
+#                 hermite_stat = stat_hermite(single_x_trace, [1])
+#                 summary_i.append(hermite_stat)
+#                 hermite_stat = stat_hermite(single_x_trace, [0,0,1])
+#                 summary_i.append(hermite_stat)
+#                 hermite_stat = stat_hermite(single_x_trace, [0,0,0,0,1])
+#                 summary_i.append(hermite_stat)
 
-        summary_i = concatenate(summary_i, axis=0)
+#         summary_i = concatenate(summary_i, axis=0)
         
-        if i == 0:
-            summary = summary_i.copy()
-        else:
-            summary = vstack((summary, summary_i))
+#         if i == 0:
+#             summary = summary_i.copy()
+#         else:
+#             summary = vstack((summary, summary_i))
     
-    summary = torch.from_numpy(array(summary)).to(torch.float32)
-    return summary
+#     summary = torch.from_numpy(array(summary)).to(torch.float32)
+#     return summary
