@@ -288,6 +288,28 @@ def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
 
     return Cxx, Cfx, Cff, idx_corr
 
+
+def stat_corr_single(single_x_trace, DeltaT, t, t_corr):
+    '''
+    Computes the autocorrelation for a single x trace signal.
+
+    INPUT
+    singles_x_trace: single x trace signal
+    DeltaT: sampling time
+    t: time array
+    t_corr: maximum time for the correlation
+
+    OUTPUT
+    Cxx: autocorrelation x signal
+    '''
+
+    sampled_point_amount = single_x_trace.shape[0]
+    idx_corr = where((t>0)*(t<t_corr))[0]
+    Cxx= corr(single_x_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each x trace
+
+    return Cxx, idx_corr
+
+
 def stat_s_redx(Cxx, t_corr, t, theta_i):
     '''
     Computes the reduced energy production for a single x trace signal.

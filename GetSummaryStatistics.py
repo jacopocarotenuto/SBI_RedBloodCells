@@ -29,15 +29,15 @@ files_in_summary_statistics = os.listdir("SummaryStatistics")
 folders_in_summary_statistics = [f for f in files_in_summary_statistics if os.path.isdir(os.path.join("SummaryStatistics", f))]
 
 # Check if the folder "Simulation" exists
-assert os.path.exists("Simulation"), "The folder 'Simulation' does not exist."
+assert os.path.exists("Simulations"), "The folder 'Simulations' does not exist."
 
 # List the elements of "Simulation" and check if it is not empty
-files_in_simulation = os.listdir("Simulation")
-assert len(files_in_simulation) > 0, "The folder 'Simulation' is empty."
+files_in_simulation = os.listdir("Simulations")
+assert len(files_in_simulation) > 0, "The folder 'Simulations' is empty."
 
 # Get the folder names in "Simulation"
-folders_in_simulation = [f for f in files_in_simulation if os.path.isdir(os.path.join("Simulation", f))]
-assert len(folders_in_simulation) > 0, "There are no folders in 'Simulation'."
+folders_in_simulation = [f for f in files_in_simulation if os.path.isdir(os.path.join("Simulations", f))]
+assert len(folders_in_simulation) > 0, "There are no folders in 'Simulations'."
 if len(files_in_simulation) > len(folders_in_simulation):
     print("Warning: There are files in 'Simulation' that are not folders.")
 
@@ -51,7 +51,7 @@ processed_folders = 0
 while(processed_simulations < sims_to_get and processed_folders < len(folders_in_simulation)):
     # Get the folder name and the files in the folder from Simulations
     folder_to_analyze = folders_in_simulation[processed_folders]
-    files_to_analyze = os.listdir(os.path.join("Simulation", folder_to_analyze))
+    files_to_analyze = os.listdir(os.path.join("Simulations", folder_to_analyze))
 
     # Check if there are new files to analyze
     file_to_analyze = [f for f in files_to_analyze if f.endswith(".pkl") and f not in done["ProcessedFiles"]]
@@ -71,7 +71,7 @@ while(processed_simulations < sims_to_get and processed_folders < len(folders_in
                 raise Exception("The file " + file + " already exists in 'SummaryStatistics': problem with 'done.pkl'!")
             
             # Load the file
-            with open(os.path.join("Simulation", folder_to_analyze, file), "rb") as f:
+            with open(os.path.join("Simulations", folder_to_analyze, file), "rb") as f:
                 data = pickle.load(f)
             print("The file " + file + " has been loaded.")
 
@@ -112,6 +112,6 @@ while(processed_simulations < sims_to_get and processed_folders < len(folders_in
 
     # Check if there are new folders to analyze
     if (processed_simulations < sims_to_get and processed_folders >= len(folders_in_simulation)):
-        print("There are no more files to analyze in 'Simulation'.")
+        print("There are no more files to analyze in 'Simulations'.")
 
 print("Completed the processing of " + str(processed_files) + " files over " + str(processed_folders) + " folders.")
