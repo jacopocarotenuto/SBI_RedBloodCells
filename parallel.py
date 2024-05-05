@@ -23,3 +23,6 @@ if __name__ == '__main__':
         pool.starmap(SimulationPipeline, [(200,1000,simulator_args, prior_limits)]*cores)
     end = time.time()
     print(f"Time taken: {end-start}")
+    
+    
+
