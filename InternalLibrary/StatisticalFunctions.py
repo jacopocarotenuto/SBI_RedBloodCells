@@ -294,7 +294,7 @@ def stat_hermite(x, index):
 def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
-    t_corr = TotalT/50
+    t_corr = TotalT/50 # Hyperparameter
     
     # Autocorrelation
     Cxx = stat_corr_single(single_x_trace, DeltaT, t, t_corr)
@@ -328,6 +328,8 @@ def select_summary_statistics(summary_statistics, selected_statistics):
     "The selected statistics are not in the summary statistics"
 
     # Get the selected summary statistics in a torch tensor
-    list_of_statistics = [summary_statistics[i] for i in selected_statistics]
-    selected_summary_statistics = torch.tensor(list_of_statistics).float()
+    list_of_statistics = [torch.tensor(summary_statistics[i]) for i in selected_statistics]
+    #print([i.size() for i in list_of_statistics])
+    selected_summary_statistics = torch.cat(list_of_statistics, dim=0)
+    selected_summary_statistics = torch.unsqueeze(selected_summary_statistics, 0)
     return selected_summary_statistics

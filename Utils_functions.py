@@ -15,6 +15,7 @@ import torch
 import time
 from time import gmtime, strftime
 import numpy as np
+from InternalLibrary.StatisticalFunctions import *
 
 ############## SIMULATOR AND TIME VARIABLES ##############
 
@@ -219,100 +220,102 @@ def get_theta_from_prior(prior_limits, n_sim):
 
 
 
-# def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t, t_corr):
-#     '''
-#     Selects the summary statistics to compute.
+def get_summary_statistics(list_stat, x_trace, f_trace, theta, DeltaT, k_psd, t, t_corr):
+    '''
+    Selects the summary statistics to compute.
 
-#     INPUT
-#     list_stat: list of summary statistics
-#     x_trace: x trace signal
-#     f_trace: f trace signal
-#     theta: parameters
-#     DeltaT: sampling time
-#     k_psd: number of segments to divide the signal
-#     t: time array
-#     t_corr: maximum time for the correlation
+    INPUT
+    list_stat: list of summary statistics
+    x_trace: x trace signal
+    f_trace: f trace signal
+    theta: parameters
+    DeltaT: sampling time
+    k_psd: number of segments to divide the signal
+    t: time array
+    t_corr: maximum time for the correlation
 
-#     OUTPUT
-#     summary: summary statistics
-#     '''
-#     n_sim = x_trace.shape[0]
-#     sampled_point_amount = x_trace.shape[1]
-#     theta_numpy = array(theta)
-#     Sample_frequency = 1/DeltaT
+    OUTPUT
+    summary: summary statistics
+    '''
+    print("THIS FUNCTION get_summary_statistics() IS DEPRECATED!!!")
 
-#     for i in range(n_sim):
-#         single_x_trace = x_trace[i]
-#         single_f_trace = f_trace[i]
-#         theta_i = theta_numpy[:, i]
+    n_sim = x_trace.shape[0]
+    sampled_point_amount = x_trace.shape[1]
+    theta_numpy = array(theta)
+    Sample_frequency = 1/DeltaT
 
-#         summary_i = []
+    for i in range(n_sim):
+        single_x_trace = x_trace[i]
+        single_f_trace = f_trace[i]
+        theta_i = theta_numpy[:, i]
 
-#         for stat in list_stat: 
-#             corr_dependency = False
-#             psdx_dependency = False
-#             psdf_dependency = False
+        summary_i = []
+
+        for stat in list_stat: 
+            corr_dependency = False
+            psdx_dependency = False
+            psdf_dependency = False
             
-#             if stat == "Cxx" or stat == "Cfx" or stat == "Cff":
-#                 Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)  
-#                 corr_dependency = True
+            if stat == "Cxx" or stat == "Cfx" or stat == "Cff":
+                Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)  
+                corr_dependency = True
 
-#                 if stat == "Cxx": summary_i.append(Cxx[idx_corr])
-#                 if stat == "Cfx": summary_i.append(Cfx[idx_corr])
-#                 if stat == "Cff": summary_i.append(Cff[idx_corr])
+                if stat == "Cxx": summary_i.append(Cxx[idx_corr])
+                if stat == "Cfx": summary_i.append(Cfx[idx_corr])
+                if stat == "Cff": summary_i.append(Cff[idx_corr])
             
-#             if stat == "s_redx":
-#                 if corr_dependency == False:
-#                     Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
-#                     corr_dependency = True
-#                 S_redx = stat_s_redx(Cxx, t_corr, t, theta_i)
-#                 summary_i.append(S_redx)
+            if stat == "s_redx":
+                if corr_dependency == False:
+                    Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
+                    corr_dependency = True
+                S_redx = stat_s_redx(Cxx, t_corr, t, theta_i)
+                summary_i.append(S_redx)
             
-#             if stat == "s_redf":
-#                 if corr_dependency == False:
-#                     Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
-#                     corr_dependency = True
-#                 S_redf = stat_s_redf(Cfx, t_corr, t, theta_i)
-#                 summary_i.append(S_redf)
+            if stat == "s_redf":
+                if corr_dependency == False:
+                    Cxx, Cfx, Cff, idx_corr = stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr)
+                    corr_dependency = True
+                S_redf = stat_s_redf(Cfx, t_corr, t, theta_i)
+                summary_i.append(S_redf)
 
-#             if stat == "psdx":
-#                 psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
-#                 psdx_dependency = True
-#                 summary_i.append(psdx)
+            if stat == "psdx":
+                psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
+                psdx_dependency = True
+                summary_i.append(psdx)
 
-#             if stat == "psdf":
-#                 psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
-#                 psdf_dependency = True
-#                 summary_i.append(psdf)
+            if stat == "psdf":
+                psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
+                psdf_dependency = True
+                summary_i.append(psdf)
 
-#             if stat == "ts_psdx":
-#                 if psdx_dependency == False:
-#                     psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
-#                     psdx_dependency = True
-#                 ts_psdx = stat_timeseries(psdx)
-#                 summary_i.append(ts_psdx)
+            if stat == "ts_psdx":
+                if psdx_dependency == False:
+                    psdx = stat_psd(single_x_trace, k_psd, Sample_frequency, sampled_point_amount)
+                    psdx_dependency = True
+                ts_psdx = stat_timeseries(psdx)
+                summary_i.append(ts_psdx)
             
-#             if stat == "ts_psdf":
-#                 if psdf_dependency == True:
-#                     psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
-#                     psdf_dependency = False
-#                 ts_psdf = stat_timeseries(psdf)
-#                 summary_i.append(ts_psdf)
+            if stat == "ts_psdf":
+                if psdf_dependency == True:
+                    psdf = stat_psd(single_f_trace, k_psd, Sample_frequency, sampled_point_amount)
+                    psdf_dependency = False
+                ts_psdf = stat_timeseries(psdf)
+                summary_i.append(ts_psdf)
 
-#             if stat == "hermite":
-#                 hermite_stat = stat_hermite(single_x_trace, [1])
-#                 summary_i.append(hermite_stat)
-#                 hermite_stat = stat_hermite(single_x_trace, [0,0,1])
-#                 summary_i.append(hermite_stat)
-#                 hermite_stat = stat_hermite(single_x_trace, [0,0,0,0,1])
-#                 summary_i.append(hermite_stat)
+            if stat == "hermite":
+                hermite_stat = stat_hermite(single_x_trace, [1])
+                summary_i.append(hermite_stat)
+                hermite_stat = stat_hermite(single_x_trace, [0,0,1])
+                summary_i.append(hermite_stat)
+                hermite_stat = stat_hermite(single_x_trace, [0,0,0,0,1])
+                summary_i.append(hermite_stat)
 
-#         summary_i = concatenate(summary_i, axis=0)
+        summary_i = concatenate(summary_i, axis=0)
         
-#         if i == 0:
-#             summary = summary_i.copy()
-#         else:
-#             summary = vstack((summary, summary_i))
+        if i == 0:
+            summary = summary_i.copy()
+        else:
+            summary = vstack((summary, summary_i))
     
-#     summary = torch.from_numpy(array(summary)).to(torch.float32)
-#     return summary
+    summary = torch.from_numpy(array(summary)).to(torch.float32)
+    return summary
