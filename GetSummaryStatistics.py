@@ -5,6 +5,7 @@ import pathos.multiprocessing as multiprocessing
 from pathos.pools import ProcessPool
 import pathos.profile as pr
 import time
+from InternalLibrary.StatisticalFunctions import compute_summary_statistics
 # Number of wanted simulations
 sims_to_get = int(100)
 max_files_to_analyze = 10
@@ -54,7 +55,7 @@ def AnalyzeFile(file):
     time_of_creation = data["time_of_creation"]
 
     # Compute the summary statistics (TO IMPLEMENT)
-    summary_statistics = {"x0": x_trace[0]}
+    summary_statistics = compute_summary_statistics(x_trace, theta,  n_sim = n_sim)
 
     # Save the summary statistics
     if not os.path.join("SummaryStatistics", file[:8]):

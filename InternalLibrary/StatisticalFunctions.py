@@ -8,6 +8,8 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.signal import welch
 import numpy as np
 import torch
+import os
+import _pickle as pickle
 
 @jit(nopython=True)
 def ComputeTheoreticalEntropy(theta):
@@ -293,34 +295,41 @@ def stat_hermite(x, index):
     return s
 
 
-def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
-    summary_statistics = {}
-    t = np.linspace(0., TotalT, single_x_trace.shape[0])
-    t_corr = TotalT/50
-    
-    # Autocorrelation
-    Cxx = stat_corr_single(single_x_trace, DeltaT, t, t_corr)
-    idx_corr = where((t>0)*(t<t_corr))[0]
-    summary_statistics["Cxx"] = Cxx[idx_corr]
-    
-    # S red
-    S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
-    summary_statistics["s_red1"] = S_red1
-    summary_statistics["s_red2"] = S_red2
-    summary_statistics["s_redx"] = S_red 
-    
-    # Power spectral density
-    psdx = stat_psd(single_x_trace, nperseg=1000, Sample_frequency=1/DeltaT)
-    summary_statistics["psdx"] = psdx
-    
-    # Time series of the power spectral density and the x_trace
-    summary_statistics["ts_psdx"] = stat_timeseries(psdx)
-    summary_statistics["ts_x"] = stat_timeseries(single_x_trace)
-    
-    # Hermite coefficients
-    summary_statistics["hermite0"] = stat_hermite(single_x_trace, [1])
-    summary_statistics["hermite2"] = stat_hermite(single_x_trace, [0, 0, 1])
-    summary_statistics["hermite4"] = stat_hermite(single_x_trace, [0, 0, 0, 0, 1]) 
+def compute_summary_statistics(x_trace,theta, DeltaT = 1/25e3, TotalT = 10, n_sim = 200):
+    summary_statistics = []
+    theta = np.array(theta)
+    for i in range(n_sim):
+        single_summary_statistics = {}
+        single_x_trace = x_trace[i,:]
+        t = np.linspace(0., TotalT, single_x_trace.shape[0])
+        t_corr = TotalT/50
+        
+        # Autocorrelation
+        Cxx = stat_corr_single(single_x_trace, DeltaT, t, t_corr)
+        idx_corr = where((t>0)*(t<t_corr))[0]
+        single_summary_statistics["Cxx"] = Cxx[idx_corr]
+        
+        # S red
+        S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
+        single_summary_statistics["s_red1"] = S_red1
+        single_summary_statistics["s_red2"] = S_red2
+        single_summary_statistics["s_redx"] = S_red 
+        
+        # Power spectral density
+        psdx = stat_psd(single_x_trace, nperseg=1000, Sample_frequency=1/DeltaT)
+        single_summary_statistics["psdx"] = psdx
+        
+        # Time series of the power spectral density and the x_trace
+        single_summary_statistics["ts_psdx"] = stat_timeseries(psdx)
+        single_summary_statistics["ts_x"] = stat_timeseries(single_x_trace)
+        
+        # Hermite coefficients
+        single_summary_statistics["hermite0"] = stat_hermite(single_x_trace, [1])
+        single_summary_statistics["hermite2"] = stat_hermite(single_x_trace, [0, 0, 1])
+        single_summary_statistics["hermite4"] = stat_hermite(single_x_trace, [0, 0, 0, 0, 1])
+        single_summary_statistics["theta"] = theta[:,i].T
+        
+        summary_statistics.append(single_summary_statistics)
 
     return summary_statistics
 
@@ -333,4 +342,27 @@ def select_summary_statistics(summary_statistics, selected_statistics):
     # Get the selected summary statistics in a torch tensor
     list_of_statistics = [summary_statistics[i] for i in selected_statistics]
     selected_summary_statistics = torch.tensor(list_of_statistics).float()
-    return selected_summary_statistics
+    return selected_summary_statistics, torch.tensor(summary_statistics["theta"]).float()
+
+
+def statistics_from_file(max_files_to_analyze = 10):
+    folders_inside_statistics = os.listdir("SummaryStatistics")
+    folders_inside_statistics.remove("done.txt")
+    if ".DS_Store" in folders_inside_statistics:
+        folders_inside_statistics.remove(".DS_Store")
+    statistics_files = []
+    for folder in folders_inside_statistics:
+        temp = os.listdir(os.path.join("SummaryStatistics", folder))
+        if ".DS_Store" in temp:
+            temp.remove(".DS_Store")
+        temp = [os.path.join(folder, f) for f in temp]
+        statistics_files.extend(temp)
+    if len(statistics_files) > max_files_to_analyze: 
+        statistics_files = statistics_files[:max_files_to_analyze]
+        
+        
+    for file in statistics_files:
+        with open(os.path.join("SummaryStatistics", file), "rb") as f:
+            yield pickle.load(f)
+
+    

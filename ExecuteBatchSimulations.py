@@ -17,5 +17,5 @@ prior_limits = {
     "D_y": [1, 530] 
 }
 
-simulation_pipeline = SimulationPipeline(batch_size = 200, total_sim = 1000, simulator_args = simulator_args, prior_limits = prior_limits)
+simulation_pipeline = SimulationPipeline(batch_size = 200, total_sim = 5000, simulator_args = simulator_args, prior_limits = prior_limits)
 simulation_pipeline.start_pipeline_parallel()
