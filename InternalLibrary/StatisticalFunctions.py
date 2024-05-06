@@ -216,7 +216,7 @@ def stat_s_redx(Cxx, t_corr, t, theta_i=[1 for i in range(9)], alpha=1e4):
     idx_corr = where((t>0)*(t<t_corr))[0]
     S_red1 = (Cxx[0]-Cxx[idx_corr])/(D_x*t[idx_corr]) # First term in S_red
     #S_red2 = ((mu_x*k_x)**2)*S1[idx_corr]/(D_x*t[idx_corr]) # Second term in S_red
-    S_red2 = ((alpha)**2)*S1[idx_corr]/(D_x*t[idx_corr])
+    S_red2 = alpha*S1[idx_corr]/(D_x*t[idx_corr])
     S_red = S_red1 + S_red2 # Compute S_red
 
     return S_red1, S_red2, S_red
