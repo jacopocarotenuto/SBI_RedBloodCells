@@ -293,7 +293,7 @@ def stat_hermite(x):
         for j in range(i+1,13,2):
             index = zeros
             index[j] = 1
-            s = np.concatenate((s, hermite(x, index.tolist()))
+            s = np.concatenate((s, hermite(x, index.tolist())))
         zeros[i] = 1
     return s
 
