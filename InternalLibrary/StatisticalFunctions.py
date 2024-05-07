@@ -277,18 +277,24 @@ def stat_timeseries(single_timeseries):
 
     return s
 
-def stat_hermite(x, index):
+def stat_hermite(x):
     '''
     Computes the Hermite statistics for a single trace signal.
 
     INPUT
     x: single trace signal
-    index: Hermite index
 
     OUTPUT
     s: Hermite statistics
     '''
-    s = hermite(x, index)
+    s = np.array([])
+    zeros = np.zeros(13)
+    for i in range(0,13,2):
+        for j in range(i+1,13,2):
+            index = zeros
+            index[j] = 1
+            s = np.concatenate((s, hermite(x, index.tolist()))
+        zeros[i] = 1
     return s
 
 
@@ -317,9 +323,7 @@ def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics["ts_x"] = stat_timeseries(single_x_trace)
     
     # Hermite coefficients
-    summary_statistics["hermite0"] = stat_hermite(single_x_trace, [1])
-    summary_statistics["hermite2"] = stat_hermite(single_x_trace, [0, 0, 1])
-    summary_statistics["hermite4"] = stat_hermite(single_x_trace, [0, 0, 0, 0, 1]) 
+    summary_statistics["hermite"] = stat_hermite(single_x_trace)
 
     return summary_statistics
 
