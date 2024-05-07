@@ -5,9 +5,10 @@ import pathos.multiprocessing as multiprocessing
 from pathos.pools import ProcessPool
 import pathos.profile as pr
 import time
+from InternalLibrary.StatisticalFunctions import compute_summary_statistics
 # Number of wanted simulations
 sims_to_get = int(100)
-max_files_to_analyze = 10
+max_files_to_analyze = 80
 
 
 
@@ -17,7 +18,8 @@ def GetSummaryStatisticsParallel(file_to_analyze, cores=-1):
     if cores > multiprocessing.cpu_count():
         print(f"WARNING: You are using {cores} cores, but you have only {multiprocessing.cpu_count()} cores available")
     pool = ProcessPool(nodes=cores)
-
+    print("Starting parallel calculations...")
+    print("Processing " + str(len(file_to_analyze)) + " files.")
     start = time.time()
     with ProcessPool(nodes=cores) as pool:
         pool.map(AnalyzeFile, file_to_analyze)
@@ -54,7 +56,10 @@ def AnalyzeFile(file):
     time_of_creation = data["time_of_creation"]
 
     # Compute the summary statistics (TO IMPLEMENT)
-    summary_statistics = {"x0": x_trace[0]}
+    summary_statistics = []
+    for i in range(n_sim):
+        s_stat = compute_summary_statistics(x_trace[i])
+        summary_statistics.append(s_stat)
 
     # Save the summary statistics
     if not os.path.join("SummaryStatistics", file[:8]):
