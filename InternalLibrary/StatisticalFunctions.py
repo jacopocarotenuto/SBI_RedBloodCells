@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 @jit(nopython=True)
-def ComputeTheoreticalEntropy(theta):
+def ComputeTheoreticalEntropy(theta, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Compute the entropy production for the given parameters.
 
@@ -21,9 +21,10 @@ def ComputeTheoreticalEntropy(theta):
     sigmas: entropy production for each simulation
     sigma_mean: mean entropy production
     '''
+    D_x = kbT * mu_x
     
-    if len(theta) != 9:
-        raise ValueError('There must be 9 parameters in theta')
+    if len(theta) != 5:
+        raise ValueError('There must be 5 parameters in theta')
 
     if len(set([x.shape for x in theta])) != 1:
         raise Exception("Parameters dimension are not all equal.")
@@ -32,13 +33,11 @@ def ComputeTheoreticalEntropy(theta):
     sigmas = np.zeros((n_sim,1), dtype = np.float64)
     
     for i in range(n_sim):
-        mu_x = theta[0][i]
-        mu_y = theta[1][i]
-        k_x = theta[2][i]
-        k_y = theta[3][i]
-        k_int = theta[4][i]
-        tau = theta[5][i]
-        eps = theta[7][i]
+        mu_y = theta[i, 0]
+        k_y = theta[i, 1]
+        k_int = theta[i, 2]
+        tau = theta[i, 3]
+        eps = theta[i, 4]
 
         sigma = (mu_y * eps**2) / ((1 + k_y * mu_y * tau) - ((k_int ** 2 * mu_x * mu_y * tau ** 2) / (1 + k_x * mu_x * tau)))
         sigmas[i] = sigma
@@ -48,7 +47,7 @@ def ComputeTheoreticalEntropy(theta):
     return sigmas, sigma_mean
 
 
-def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim):
+def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Compute the entropy production for the given traces and parameters
     
@@ -69,17 +68,16 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim):
     Fy = []
     S_tot = []
 
+    D_x = kbT * mu_x
     for i in range (n_sim):
         # Unpack Parameters
-        mu_x = theta[0][i]
-        mu_y = theta[1][i]
-        k_x = theta[2][i]
-        k_y = theta[3][i]
-        k_int = theta[4][i]
-        tau = theta[5][i]
-        eps = theta[6][i]
-        D_x = theta[7][i]
-        D_y = theta[8][i]  
+        mu_y = theta[i, 0]
+        k_y = theta[i, 1]
+        k_int = theta[i, 2]
+        tau = theta[i, 3]
+        eps = theta[i, 4]
+
+        D_y = kbT * mu_y
 
         x, y, f = x_trace[i], y_trace[i], f_trace[i]
 
@@ -197,7 +195,7 @@ def stat_corr_single(single_x_trace, DeltaT, t, t_corr):
     return Cxx
 
 
-def stat_s_redx(Cxx, t_corr, t, theta_i=[1 for i in range(9)], alpha=1e4):
+def stat_s_redx(Cxx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Computes the reduced energy production for a single x trace signal.
 
@@ -210,18 +208,18 @@ def stat_s_redx(Cxx, t_corr, t, theta_i=[1 for i in range(9)], alpha=1e4):
     OUTPUT
     S_red: reduced x energy production
     '''
-    mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
+    D_x = kbT * mu_x
+    
     S1 = cumulative_trapezoid(Cxx, x=t, axis=-1, initial=0)
     S1 = cumulative_trapezoid(S1, x=t, axis=-1, initial=0)
     idx_corr = where((t>0)*(t<t_corr))[0]
     S_red1 = (Cxx[0]-Cxx[idx_corr])/(D_x*t[idx_corr]) # First term in S_red
-    #S_red2 = ((mu_x*k_x)**2)*S1[idx_corr]/(D_x*t[idx_corr]) # Second term in S_red
-    S_red2 = alpha*S1[idx_corr]/(D_x*t[idx_corr])
+    S_red2 = ((mu_x*k_x)**2)*S1[idx_corr]/(D_x*t[idx_corr]) # Second term in S_red
     S_red = S_red1 + S_red2 # Compute S_red
 
     return S_red1, S_red2, S_red
 
-def stat_s_redf(Cfx, t_corr, t, theta_i):
+def stat_s_redf(Cfx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Computes the reduced energy production for a xf trace signal.
 
@@ -234,7 +232,8 @@ def stat_s_redf(Cfx, t_corr, t, theta_i):
     OUTPUT
     S_red: reduced f energy production
     '''
-    mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
+    D_x = kbT * mu_x
+
     idx_corr = where((t>0)*(t<t_corr))[0]
     S2f = cumulative_trapezoid(Cfx - Cfx[0], x=t, axis=-1, initial=0)
     S3f = cumulative_trapezoid(Cfx, x=t, axis=-1, initial=0)
@@ -298,7 +297,7 @@ def stat_hermite(x):
     return s
 
 
-def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
+def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
     t_corr = TotalT/50 # Hyperparameter
@@ -324,6 +323,9 @@ def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
     
     # Hermite coefficients
     summary_statistics["hermite"] = stat_hermite(single_x_trace)
+
+    # Parameters
+    summary_statistics["theta"] = single_theta
 
     return summary_statistics
 
