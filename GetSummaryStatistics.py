@@ -59,7 +59,7 @@ def AnalyzeFile(file):
     # Compute the summary statistics (TO IMPLEMENT)
     summary_statistics = []
     for i in range(n_sim):
-        s_stat = compute_summary_statistics(x_trace[i],np.array(theta)[:,i])
+        s_stat = compute_summary_statistics(x_trace[i], theta[:, i])
         summary_statistics.append(s_stat)
 
     # Save the summary statistics

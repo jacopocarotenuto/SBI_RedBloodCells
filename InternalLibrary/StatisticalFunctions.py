@@ -11,6 +11,42 @@ import torch
 import os
 import _pickle as pickle
 
+
+def get_theta_from_prior(prior_limits, n_sim):
+    '''
+    Get parameters drawn from the prior.
+
+    INPUT
+    prior_limits: prior limits
+    n_sim: number of simulated trajectories
+
+    OUTPUT
+    theta: parameters drawn from the prior
+    theta_torch: parameters drawn from the prior in torch format
+    '''
+
+    # Get parameters drawn from the prior
+    theta = [np.random.uniform(prior_limits[i][0], prior_limits[i][1], size=(n_sim, 1)) for i in prior_limits]
+    theta_numpy = np.array(theta)
+    theta_torch = torch.from_numpy(theta_numpy[:, :, 0]).to(torch.float32)
+
+    return theta_numpy, theta_torch
+
+
+def get_prior_limit_list(prior_limits):
+    prior_limits_list = [[prior_limits[i][0], prior_limits[i][1]] for i in prior_limits]
+    return prior_limits_list
+
+
+def get_prior_box(prior_limits):
+    prior_limits_list = get_prior_limit_list(prior_limits)
+    prior_limits_array = array(prior_limits_list)
+    prior_box = utils.torchutils.BoxUniform(low=torch.tensor(prior_limits_array[:, 0]), high=torch.tensor(prior_limits_array[:, 1]))
+    return prior_box
+
+
+
+
 @jit(nopython=True)
 def ComputeTheoreticalEntropy(theta, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
@@ -35,11 +71,11 @@ def ComputeTheoreticalEntropy(theta, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     sigmas = np.zeros((n_sim,1), dtype = np.float64)
     
     for i in range(n_sim):
-        mu_y = theta[i, 0]
-        k_y = theta[i, 1]
-        k_int = theta[i, 2]
-        tau = theta[i, 3]
-        eps = theta[i, 4]
+        mu_y = theta[0, i]
+        k_y = theta[1, i]
+        k_int = theta[2, i]
+        tau = theta[3, i]
+        eps = theta[4, i]
 
         sigma = (mu_y * eps**2) / ((1 + k_y * mu_y * tau) - ((k_int ** 2 * mu_x * mu_y * tau ** 2) / (1 + k_x * mu_x * tau)))
         sigmas[i] = sigma
@@ -73,11 +109,11 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, mu_x=2.8e4,
     D_x = kbT * mu_x
     for i in range (n_sim):
         # Unpack Parameters
-        mu_y = theta[i, 0]
-        k_y = theta[i, 1]
-        k_int = theta[i, 2]
-        tau = theta[i, 3]
-        eps = theta[i, 4]
+        mu_y = theta[0, i]
+        k_y = theta[1, i]
+        k_int = theta[2, i]
+        tau = theta[3, i]
+        eps = theta[4, i]
 
         D_y = kbT * mu_y
 
@@ -341,7 +377,9 @@ def select_summary_statistics(summary_statistics, selected_statistics):
     #print([i.size() for i in list_of_statistics])
     selected_summary_statistics = torch.cat(list_of_statistics, dim=0)
     selected_summary_statistics = torch.unsqueeze(selected_summary_statistics, 0)
+    selected_summary_statistics = selected_summary_statistics.to(torch.float32)
     return selected_summary_statistics
+
 
 def statistics_from_file(max_files_to_analyze=10):
     folders_inside_statistics = os.listdir("SummaryStatistics")
