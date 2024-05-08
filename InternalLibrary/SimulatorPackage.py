@@ -1,6 +1,5 @@
 from numba import jit
-from numpy import zeros, arange, uint8, int32, float32, sqrt, uint32, ones, int64
-from numpy.random import randn
+from numpy import zeros, arange, float32, sqrt, int64
 import numpy as np
 import time
 import os
@@ -11,31 +10,39 @@ import pathos.profile as pr
 
 # IDEAS: Add metrics to simulation pipeline like: average time per batch, total time, etc...
 
+## REWORK IN PROGRESS
+## IMPLEMENTING HEUN METHOD
 
 @jit(nopython = True)
-def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = None):
+def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = None, mu_x = 2.8e4, k_x = 6e-3, kbT = 3.8, debug = False):
     
     
     time_steps_amount = int64(TotalT/dt) # Number of steps
     sampled_point_amount = int64((TotalT - transient_time)/DeltaT) # Number of sampled points
     sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
     transient_time_steps = int64(transient_time/dt)
-    n_sim = theta[0].shape[0]
-    
-    # Unpack Parameters
-    mu_x = theta[0]
-    mu_y = theta[1]
-    k_x = theta[2]
-    k_y = theta[3]
-    k_int = theta[4]
-    tau = theta[5]
-    eps = theta[6]
-    D_x = theta[7]
-    D_y = theta[8]
+    n_sim = theta.shape[1]
+
+    if debug:
+        print("Time steps amount: ", time_steps_amount)
+        print("Sampled point amount: ",sampled_point_amount)
+        print("Sampling delta time steps: ", sampling_delta_time_steps)
+        print("Transient time steps: ", transient_time_steps)
+        print("Number of simulations: ", n_sim)
+        print("You are currently using ", theta.shape[1], " free parameters")
     
     
-    if len(set([x.shape for x in theta])) != 1:
-        raise Exception("Parameters dimension are not all equal. Detected number of different parameters: ", n_sim)
+    mu_y = theta[0]
+    k_y = theta[1]
+    k_int = theta[2]
+    tau = theta[3]
+    eps = theta[4]
+    D_x = kbT * mu_x
+    D_y = kbT * mu_y
+    
+    
+    if theta.shape[1] != n_sim:
+        raise Exception("Something went wrong with the detection of the number of simulations")
     
     if transient_time > TotalT:
         raise Exception("Transient time is greater than Total Time")
@@ -63,10 +70,38 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
     
     # CHECK: Benchmark the version with the explicit dx, dy, df and the one with the x, y, f arrays with the calculation in the assigment
     
+    # Initialize intermediate step
+    
+    x_tilde = zeros((n_sim,1), dtype = float32)
+    y_tilde = zeros((n_sim,1), dtype = float32)
+    f_tilde = zeros((n_sim,1), dtype = float32)
+    
+    # Pre-compute constant
+    sqrt_2mu_x_D_x_dt = sqrt(2*mu_x*D_x*dt)
+    sqrt_2mu_y_D_y_dt = sqrt(2*mu_y*D_y*dt)
+    sqrt_2eps2_dt_tau = sqrt(2*eps**2*dt/tau)
+    
+    mu_x_dt = mu_x*dt
+    mu_y_dt = mu_y*dt
+    tau_dt = dt/tau
+    
+    
     for t in arange(time_steps_amount - 1):
-        x[:,] = x[:,] + mu_x*(- k_x * x[:,] + k_int*y[:,])*dt                +          sqrt(2*mu_x*D_x*dt)  *   np.random.randn(n_sim,1)
-        y[:,] = y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt        +          sqrt(2*mu_y*D_y*dt)     *   np.random.randn(n_sim,1)
-        f[:,] = f[:,] + -(f[:,]/tau)*dt                                   +          sqrt(2*eps**2*dt/tau)   *   np.random.randn(n_sim,1)
+        # Virtual time-step
+        x_tilde[:,] =  x[:,] +mu_x*(- k_x * x[:,] + k_int*y[:,])*dt             +  sqrt_2mu_x_D_x_dt * np.random.randn(n_sim,1)
+        y_tilde[:,] =  y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt       +  sqrt_2mu_y_D_y_dt * np.random.randn(n_sim,1)
+        f_tilde[:,] =  f[:,] +-(f[:,]/tau)*dt                                   +  sqrt_2eps2_dt_tau * np.random.randn(n_sim,1)
+        
+        # Real time-step  x + (A + B)/2 = xt -A/2 + B/2 = xt + (B-A)/2
+        # x + A = xt
+        x[:,] = x_tilde[:,] + (  - mu_x_dt*(- k_x * x[:,] + k_int*y[:,])      + mu_x_dt*(- k_x * x_tilde[:,] + k_int*y_tilde[:,])           ) / 2
+        y[:,] = y_tilde[:,] + (  - mu_x_dt*(-k_y*y[:,] + k_int*x[:,] + f[:,]) + mu_y_dt*(-k_y*y_tilde[:,] + k_int*x_tilde[:,] + f_tilde[:,])) / 2
+        f[:,] = f_tilde[:,] + (  - (-f[:,])*tau_dt                            + (-f_tilde[:,])*tau_dt                                       ) / 2
+        
+        # Old Euler Code, keep for reference
+        # x[:,] = x[:,] + mu_x*(- k_x * x[:,] + k_int*y[:,])*dt      + sqrt(2*mu_x*D_x*dt)   * np.random.randn(n_sim,1)
+        # y[:,] = y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt + sqrt(2*mu_y*D_y*dt)   * np.random.randn(n_sim,1)
+        # f[:,] = f[:,] + -(f[:,]/tau)*dt                            + sqrt(2*eps**2*dt/tau) * np.random.randn(n_sim,1)
 
         sampling_counter = sampling_counter + 1
         if sampling_counter == sampling_delta_time_steps:
@@ -119,8 +154,6 @@ def CheckParameters(dt, DeltaT, TotalT, theta):
     if dt*sampling_delta_time_steps != DeltaT:
         print(f"WARNING: dt*sampling_delta_time_steps is {dt*sampling_delta_time_steps}, but DeltaT is {DeltaT}")
         passed_sanity_checks = False
-    if len(set([x.shape for x in theta])) != 1:
-        raise Exception("Parameters dimension are not all equal. Detected number of different parameters: ", n_sim)
     if passed_sanity_checks:
         print("All checks passed")
         
@@ -130,6 +163,9 @@ class SimulationPipeline():
     def __init__(self, batch_size: int, total_sim: int, simulator_args: dict, prior_limits: dict, check_parameters: bool = False):
         self.batch_size = batch_size
         self.total_sim = total_sim
+        if batch_size > total_sim:
+            print("Your batch size is greater than the total number of simulations, setting batch size to total number of simulations")
+            self.batch_size = total_sim
         self.simulator_args = simulator_args
         self.prior_limits = prior_limits
         self.total_batches = total_sim // batch_size
@@ -141,7 +177,7 @@ class SimulationPipeline():
         _, _, _ = Simulator_noGPU(dt = 1, DeltaT = 1, TotalT = 1,theta = self._get_new_theta_batch())
         
     def _get_new_theta_batch(self):
-        return [np.random.uniform(self.prior_limits[i][0], self.prior_limits[i][1], size=(self.batch_size, 1)) for i in self.prior_limits]
+        return np.array([np.random.uniform(self.prior_limits[i][0], self.prior_limits[i][1], size=(self.batch_size, 1)) for i in self.prior_limits])
     
     def _simulate_batch(self, theta):
         x_trace, y_trace, f_trace = Simulator_noGPU(theta = theta, **self.simulator_args)
@@ -199,6 +235,9 @@ class SimulationPipeline():
             cores = multiprocessing.cpu_count()
         if cores > multiprocessing.cpu_count():
             print(f"WARNING: You are using {cores} cores, but you have only {multiprocessing.cpu_count()} cores available")
+            
+        if self.total_batches % cores != 0:
+            print("WARNING: The number of batches is not divisible by the number of cores, this leads to sub-optimal performance")
         pool = ProcessPool(nodes=cores)
         
         start = time.time()

@@ -6,6 +6,7 @@ from pathos.pools import ProcessPool
 import pathos.profile as pr
 import time
 from InternalLibrary.StatisticalFunctions import compute_summary_statistics
+import numpy as np
 # Number of wanted simulations
 sims_to_get = int(100)
 max_files_to_analyze = 80
@@ -58,7 +59,7 @@ def AnalyzeFile(file):
     # Compute the summary statistics (TO IMPLEMENT)
     summary_statistics = []
     for i in range(n_sim):
-        s_stat = compute_summary_statistics(x_trace[i])
+        s_stat = compute_summary_statistics(x_trace[i],np.array(theta)[:,i])
         summary_statistics.append(s_stat)
 
     # Save the summary statistics
@@ -123,6 +124,3 @@ print(file_to_analyze)
 
 
 GetSummaryStatisticsParallel(file_to_analyze)
-
-
-
