@@ -21,7 +21,7 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
     sampled_point_amount = int64((TotalT - transient_time)/DeltaT) # Number of sampled points
     sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
     transient_time_steps = int64(transient_time/dt)
-    n_sim = theta.shape[0]
+    n_sim = theta.shape[1]
 
     if debug:
         print("Time steps amount: ", time_steps_amount)
@@ -32,15 +32,16 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
         print("You are currently using ", theta.shape[1], " free parameters")
     
     
-    mu_y = theta[:,0]
-    k_y = theta[:,1]
-    k_int = theta[:,2]
-    tau = theta[:,3]
-    eps = theta[:,4]
+    mu_y = theta[0]
+    k_y = theta[1]
+    k_int = theta[2]
+    tau = theta[3]
+    eps = theta[4]
     D_x = kbT * mu_x
     D_y = kbT * mu_y
     
-    if theta.shape[0] != n_sim:
+    
+    if theta.shape[1] != n_sim:
         raise Exception("Something went wrong with the detection of the number of simulations")
     
     if transient_time > TotalT:
@@ -91,10 +92,11 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
         y_tilde[:,] =  y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt       +  sqrt_2mu_y_D_y_dt * np.random.randn(n_sim,1)
         f_tilde[:,] =  f[:,] +-(f[:,]/tau)*dt                                   +  sqrt_2eps2_dt_tau * np.random.randn(n_sim,1)
         
-        # Real time-step
-        x[:,] = x[:,] + ( mu_x_dt*(- k_x * x[:,] + k_int*y[:,])       +  sqrt_2mu_x_D_x_dt * np.random.randn(n_sim,1) + mu_x_dt*(- k_x * x_tilde[:,] + k_int*y_tilde[:,])               +  sqrt_2mu_x_D_x_dt   *   np.random.randn(n_sim,1) ) / 2
-        y[:,] = y[:,] + ( mu_x_dt*(-k_y*y[:,] + k_int*x[:,] + f[:,])  +  sqrt_2mu_y_D_y_dt * np.random.randn(n_sim,1) + mu_y_dt*(-k_y*y_tilde[:,] + k_int*x_tilde[:,] + f_tilde[:,])    +  sqrt_2mu_y_D_y_dt   *   np.random.randn(n_sim,1) ) / 2
-        f[:,] = f[:,] + ( -(f[:,])*tau_dt                             +  sqrt_2eps2_dt_tau * np.random.randn(n_sim,1) + -(f_tilde[:,])*tau_dt                                           +  sqrt_2eps2_dt_tau   *   np.random.randn(n_sim,1) ) / 2
+        # Real time-step  x + (A + B)/2 = xt -A/2 + B/2 = xt + (B-A)/2
+        # x + A = xt
+        x[:,] = x_tilde[:,] + (  - mu_x_dt*(- k_x * x[:,] + k_int*y[:,])      + mu_x_dt*(- k_x * x_tilde[:,] + k_int*y_tilde[:,])           ) / 2
+        y[:,] = y_tilde[:,] + (  - mu_x_dt*(-k_y*y[:,] + k_int*x[:,] + f[:,]) + mu_y_dt*(-k_y*y_tilde[:,] + k_int*x_tilde[:,] + f_tilde[:,])) / 2
+        f[:,] = f_tilde[:,] + (  - (-f[:,])*tau_dt                            + (-f_tilde[:,])*tau_dt                                       ) / 2
         
         # Old Euler Code, keep for reference
         # x[:,] = x[:,] + mu_x*(- k_x * x[:,] + k_int*y[:,])*dt      + sqrt(2*mu_x*D_x*dt)   * np.random.randn(n_sim,1)
@@ -112,7 +114,6 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
             
 
     return x_trace, f_trace, y_trace # Check if this is right
-
 
 def CheckParameters(dt, DeltaT, TotalT, theta):
     '''
@@ -162,6 +163,9 @@ class SimulationPipeline():
     def __init__(self, batch_size: int, total_sim: int, simulator_args: dict, prior_limits: dict, check_parameters: bool = False):
         self.batch_size = batch_size
         self.total_sim = total_sim
+        if batch_size > total_sim:
+            print("Your batch size is greater than the total number of simulations, setting batch size to total number of simulations")
+            self.batch_size = total_sim
         self.simulator_args = simulator_args
         self.prior_limits = prior_limits
         self.total_batches = total_sim // batch_size
@@ -173,7 +177,7 @@ class SimulationPipeline():
         _, _, _ = Simulator_noGPU(dt = 1, DeltaT = 1, TotalT = 1,theta = self._get_new_theta_batch())
         
     def _get_new_theta_batch(self):
-        return np.array([np.random.uniform(self.prior_limits[i][0], self.prior_limits[i][0], size=(self.batch_size, 1)) for i in self.prior_limits]).reshape((self.batch_size,5,1))
+        return np.array([np.random.uniform(self.prior_limits[i][0], self.prior_limits[i][1], size=(self.batch_size, 1)) for i in self.prior_limits])
     
     def _simulate_batch(self, theta):
         x_trace, y_trace, f_trace = Simulator_noGPU(theta = theta, **self.simulator_args)

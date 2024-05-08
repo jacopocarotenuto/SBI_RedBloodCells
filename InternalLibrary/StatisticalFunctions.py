@@ -8,6 +8,8 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.signal import welch
 import numpy as np
 import torch
+import os
+import _pickle as pickle
 
 @jit(nopython=True)
 def ComputeTheoreticalEntropy(theta):
@@ -298,7 +300,7 @@ def stat_hermite(x):
     return s
 
 
-def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
+def compute_summary_statistics(single_x_trace,single_theta, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
     t_corr = TotalT/50 # Hyperparameter
@@ -324,6 +326,7 @@ def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
     
     # Hermite coefficients
     summary_statistics["hermite"] = stat_hermite(single_x_trace)
+    summary_statistics["theta"] = single_theta
 
     return summary_statistics
 
@@ -338,3 +341,22 @@ def select_summary_statistics(summary_statistics, selected_statistics):
     selected_summary_statistics = torch.cat(list_of_statistics, dim=0)
     selected_summary_statistics = torch.unsqueeze(selected_summary_statistics, 0)
     return selected_summary_statistics
+
+def statistics_from_file(max_files_to_analyze=10):
+    folders_inside_statistics = os.listdir("SummaryStatistics")
+    folders_inside_statistics.remove("done.txt")
+    if ".DS_Store" in folders_inside_statistics:
+        folders_inside_statistics.remove(".DS_Store")
+    statistics_files = []
+    for folder in folders_inside_statistics:
+        temp = os.listdir(os.path.join("SummaryStatistics", folder))
+        if ".DS_Store" in temp:
+            temp.remove(".DS_Store")
+        temp = [os.path.join(folder, f) for f in temp]
+        statistics_files.extend(temp)
+    if len(statistics_files) > max_files_to_analyze:
+        statistics_files = statistics_files[:max_files_to_analyze]
+
+    for file in statistics_files:
+        with open(os.path.join("SummaryStatistics", file), "rb") as f:
+            yield pickle.load(f)
