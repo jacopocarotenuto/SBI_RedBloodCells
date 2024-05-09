@@ -67,7 +67,7 @@ def ComputeTheoreticalEntropy(theta, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     if len(set([x.shape for x in theta])) != 1:
         raise Exception("Parameters dimension are not all equal.")
     
-    n_sim = theta[0].shape[0]
+    n_sim = theta.shape[1]
     sigmas = np.zeros((n_sim,1), dtype = np.float64)
     
     for i in range(n_sim):
@@ -399,3 +399,4 @@ def statistics_from_file(max_files_to_analyze=10):
     for file in statistics_files:
         with open(os.path.join("SummaryStatistics", file), "rb") as f:
             yield pickle.load(f)
+
