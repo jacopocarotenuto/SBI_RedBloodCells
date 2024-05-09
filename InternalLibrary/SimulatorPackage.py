@@ -113,7 +113,7 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
 
             
 
-    return x_trace, f_trace, y_trace # Check if this is right
+    return x_trace, y_trace, f_trace # Check if this is right
 
 def CheckParameters(dt, DeltaT, TotalT, theta):
     '''
