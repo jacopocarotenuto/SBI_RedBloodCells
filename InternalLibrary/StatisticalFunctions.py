@@ -11,6 +11,7 @@ import torch
 import os
 import _pickle as pickle
 from scipy.optimize import curve_fit
+from scipy.stats import zscore
 
 
 def get_theta_from_prior(prior_limits, n_sim):
@@ -402,18 +403,30 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     return summary_statistics
 
 
-def select_summary_statistics(summary_statistics, selected_statistics):
+def select_summary_statistics(summary_statistics, selected_statistics, z_score=False):
     assert set(selected_statistics).issubset(set(summary_statistics.keys()))
     "The selected statistics are not in the summary statistics"
 
+    theta_selected = False
+    if "theta" in selected_statistics:
+        theta_selected = True
+        selected_statistics.remove("theta")
+
     # Get the selected summary statistics in a torch tensor
-    list_of_statistics = [torch.tensor(summary_statistics[i]) for i in selected_statistics]
+    if z_score:
+        list_of_statistics = [torch.tensor(zscore(summary_statistics[i])) for i in selected_statistics]
+    else:   
+        list_of_statistics = [torch.tensor(summary_statistics[i]) for i in selected_statistics]
     #print([i.size() for i in list_of_statistics])
     selected_summary_statistics = torch.cat(list_of_statistics, dim=0)
     selected_summary_statistics = torch.unsqueeze(selected_summary_statistics, 0)
+
+    if theta_selected:
+        theta = torch.tensor(summary_statistics["theta"])
+        selected_summary_statistics = torch.cat((selected_summary_statistics, theta.T), dim=1)
+
     selected_summary_statistics = selected_summary_statistics.to(torch.float32)
     return selected_summary_statistics
-
 
 def statistics_from_file(max_files_to_analyze=10):
     folders_inside_statistics = os.listdir("SummaryStatistics")
