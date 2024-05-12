@@ -183,7 +183,7 @@ def hermite(x, index):
     std_x = np.std(x)
     z = x/std_x
     i = len(index)-1
-    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(x, index)*(2**i*
+    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index)*(2**i*
             np.math.factorial(i)*np.sqrt(np.pi))**-0.5) /np.sqrt(std_x)))
 
 def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
