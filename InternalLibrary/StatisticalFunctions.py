@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import os
 import _pickle as pickle
+from scipy.optimize import curve_fit
 
 
 def get_theta_from_prior(prior_limits, n_sim):
@@ -179,11 +180,13 @@ def corr(x,y,nmax,dt=False):
 
 
 
-def hermite(x, index):
+def hermite(x, i):
     std_x = np.std(x)
     z = x/std_x
-    i = len(index)-1
-    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index)*(2**i*
+    zeros = np.zeros(13)
+    index = zeros
+    index[i] = 1
+    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index.to_list())*(2**i*
             np.math.factorial(i)*np.sqrt(np.pi))**-0.5) /np.sqrt(std_x)))
 
 def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
@@ -296,6 +299,11 @@ def stat_psd(single_trace, nperseg, Sample_frequency):
     frequencies, psd = welch(single_trace, fs=Sample_frequency, nperseg=nperseg)
     return psd
 
+def stat_psd_mean(single_trace, nperseg, Sample_frequency):
+    _ , psd = welch(single_trace, fs=Sample_frequency, nperseg=nperseg)
+    return np.array([mean(psd), np.std(psd)])
+
+
 def stat_timeseries(single_timeseries):
     '''
     Computes the summary statistics for a single time series signal.
@@ -325,12 +333,33 @@ def stat_hermite(x):
     s: Hermite statistics
     '''
     s = np.array([])
-    zeros = np.zeros(13)
     for i in range(0,13,2):
-        index = zeros
-        index[i] = 1
-        s = np.concatenate((s, [hermite(x, index.tolist())]))
+        s = np.concatenate((s, [hermite(x, i)]))
     return s
+
+def stat_mode(cxx, dt, mean_psd):
+    def f(t, a0, a2, a4, a6, a8, a10, a12, a14, a16, a18, a20):
+        t = t*mean_psd
+        h = hermite
+        return np.sqrt(mean_psd)*(a0*h(t, 0) + a2*h(t, 2) + a4*h(t, 4) + a6*h(t, 6) + a8*h(t, 8) + a10*h(t, 10) + a12*h(t, 12)+
+                                    a14*h(t, 12) + a16*h(t, 16) + a18*h(t, 18) + a20*h(t, 20))
+    tp = np.linspace(0, dt*cxx.shape[0], cxx.shape[0])
+    popt, _ = curve_fit(f, tp, cxx)
+    return np.array(popt)
+
+def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
+    x = single_x_trace
+    x_std = np.std(x)
+
+    herm = stat_hermite(x)
+
+    psd = stat_psd(x, nperseg, Sample_frequency)
+    psd_m = mean(psd)
+    psd_std = np.std(psd)
+
+    mode = stat_mode(cxx, dt, mean_psd)
+
+    return np.array([x_std, *herm, psd_m, psd_std, *mode])
 
 
 def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
@@ -341,7 +370,8 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     # Autocorrelation
     Cxx = stat_corr_single(single_x_trace, DeltaT, t, t_corr)
     idx_corr = where((t>0)*(t<t_corr))[0]
-    summary_statistics["Cxx"] = Cxx[idx_corr]
+    Cxx = Cxx[idx_corr]
+    summary_statistics["Cxx"] = Cxx
     
     # S red
     S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
@@ -360,6 +390,12 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     # Hermite coefficients
     summary_statistics["hermite"] = stat_hermite(single_x_trace)
 
+    # Cxx decomposition in Hermite Coefficients
+    summary_statistics["modes"] = stat_mode(Cxx, 1e-6, mean(psdx))
+
+    # Tucci's summary statistics
+    summary_statistics["tucci"] = stat_Tucci(single_x_trace, 1000, 1/DeltaT, Cxx, 1e-6, mean(psdx))
+ 
     # Parameters
     summary_statistics["theta"] = single_theta
 
