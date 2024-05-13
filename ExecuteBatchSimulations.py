@@ -13,5 +13,5 @@ prior_limits = {
     "eps": [0.5, 6],
 }
 
-simulation_pipeline = SimulationPipeline(batch_size = 200, total_sim = 1000, simulator_args = simulator_args, prior_limits = prior_limits)
+simulation_pipeline = SimulationPipeline(batch_size = 200, total_sim = 1600, simulator_args = simulator_args, prior_limits = prior_limits)
 simulation_pipeline.start_pipeline_parallel()

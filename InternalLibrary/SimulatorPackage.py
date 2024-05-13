@@ -250,7 +250,7 @@ class SimulationPipeline():
     def _simulate_and_save_batch(self, theta):
         x_trace, y_trace, f_trace = self._simulate_batch(theta)
         self._save_batch({"theta": theta, "x_trace": x_trace, "y_trace": y_trace, "f_trace": f_trace, "n_sim": self.batch_size, "time_of_creation": time.strftime("%Y%m%d-%H%M%S")})
-
+        print(f"Saved batch of {self.batch_size} simulations at {time.strftime('%H:%M:%S of %Y-%m-%d')}")
         
 class SimulationLoader():
     def __init__(self, day_folder = None) -> None:
