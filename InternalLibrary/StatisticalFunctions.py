@@ -187,7 +187,7 @@ def hermite(x, i):
     zeros = np.zeros(13)
     index = zeros
     index[i] = 1
-    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index.to_list())*(2**i*
+    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index.tolist())*(2**i*
             np.math.factorial(i)*np.sqrt(np.pi))**-0.5) /np.sqrt(std_x)))
 
 def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
@@ -346,7 +346,7 @@ def stat_mode(cxx, dt, mean_psd):
                                     a14*h(t, 12) + a16*h(t, 16) + a18*h(t, 18) + a20*h(t, 20))
     tp = np.linspace(0, dt*cxx.shape[0], cxx.shape[0])
     popt, _ = curve_fit(f, tp, cxx)
-    return np.array(popt)
+    return popt
 
 def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
     x = single_x_trace
