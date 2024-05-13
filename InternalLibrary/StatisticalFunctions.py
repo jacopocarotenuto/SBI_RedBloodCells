@@ -184,7 +184,7 @@ def corr(x,y,nmax,dt=False):
 def hermite(x, i):
     std_x = np.std(x)
     z = x/std_x
-    zeros = np.zeros(13)
+    zeros = np.zeros(30)
     index = zeros
     index[i] = 1
     return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index.tolist())*(2**i*
