@@ -371,8 +371,8 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     # Autocorrelation
     Cxx = stat_corr_single(single_x_trace, DeltaT, t, t_corr)
     idx_corr = where((t>0)*(t<t_corr))[0]
-    Cxx = Cxx[idx_corr]
-    summary_statistics["Cxx"] = Cxx
+    cxx = Cxx[idx_corr]
+    summary_statistics["Cxx"] = cxx
     
     # S red
     S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
@@ -392,10 +392,10 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     summary_statistics["hermite"] = stat_hermite(single_x_trace)
 
     # Cxx decomposition in Hermite Coefficients
-    summary_statistics["modes"] = stat_mode(Cxx, 1e-6, mean(psdx))
+    summary_statistics["modes"] = stat_mode(cxx, 1e-6, mean(psdx))
 
     # Tucci's summary statistics
-    summary_statistics["tucci"] = stat_Tucci(single_x_trace, 1000, 1/DeltaT, Cxx, 1e-6, mean(psdx))
+    summary_statistics["tucci"] = stat_Tucci(single_x_trace, 1000, 1/DeltaT, cxx, 1e-6, mean(psdx))
  
     # Parameters
     summary_statistics["theta"] = single_theta
