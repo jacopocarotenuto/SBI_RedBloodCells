@@ -95,6 +95,11 @@ assert os.path.exists("Simulations"), "The folder 'Simulations' does not exist."
 files_in_simulation = os.listdir("Simulations")
 assert len(files_in_simulation) > 0, "The folder 'Simulations' is empty."
 
+
+today_folder = datetime.datetime.now().strftime("%Y%m%d")
+if not os.path.exists(os.path.join("SummaryStatistics", today_folder)):
+    os.mkdir(os.path.join("SummaryStatistics", today_folder))
+
 # Get the folder names in "Simulation"
 folders_in_simulation = [f for f in files_in_simulation if os.path.isdir(os.path.join("Simulations", f))]
 assert len(folders_in_simulation) > 0, "There are no folders in 'Simulations'."
