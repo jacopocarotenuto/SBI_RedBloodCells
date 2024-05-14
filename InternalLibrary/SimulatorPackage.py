@@ -17,28 +17,28 @@ import pathos.profile as pr
 def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = None, mu_x = 2.8e4, k_x = 6e-3, kbT = 3.8, debug = False):
     
     
-    time_steps_amount = int64(TotalT/dt) # Number of steps
-    sampled_point_amount = int64((TotalT - transient_time)/DeltaT) # Number of sampled points
-    sampling_delta_time_steps = int64(DeltaT/dt) # Number of steps between samples
-    transient_time_steps = int64(transient_time/dt)
-    n_sim = theta.shape[1]
+    time_steps_amount           = int64(TotalT/dt)                          # Number of steps
+    sampled_point_amount        = int64((TotalT - transient_time)/DeltaT)   # Number of sampled points
+    sampling_delta_time_steps   = int64(DeltaT/dt)                          # Number of steps between samples
+    transient_time_steps        = int64(transient_time/dt)
+    n_sim                       = theta.shape[1]
 
     if debug:
-        print("Time steps amount: ", time_steps_amount)
-        print("Sampled point amount: ",sampled_point_amount)
-        print("Sampling delta time steps: ", sampling_delta_time_steps)
-        print("Transient time steps: ", transient_time_steps)
-        print("Number of simulations: ", n_sim)
-        print("You are currently using ", theta.shape[1], " free parameters")
+        print("Time steps amount: ",            time_steps_amount)
+        print("Sampled point amount: ",         sampled_point_amount)
+        print("Sampling delta time steps: ",    sampling_delta_time_steps)
+        print("Transient time steps: ",         transient_time_steps)
+        print("Number of simulations: ",        n_sim)
+        print("You are currently using ",       theta.shape[1], " free parameters")
     
     
-    mu_y = theta[0]
-    k_y = theta[1]
-    k_int = theta[2]
-    tau = theta[3]
-    eps = theta[4]
-    D_x = kbT * mu_x
-    D_y = kbT * mu_y
+    mu_y    = theta[0]
+    k_y     = theta[1]
+    k_int   = theta[2]
+    tau     = theta[3]
+    eps     = theta[4]
+    D_x     = kbT * mu_x
+    D_y     = kbT * mu_y
     
     
     if theta.shape[1] != n_sim:
@@ -72,9 +72,22 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
     
     # Initialize intermediate step
     
-    x_tilde = zeros((n_sim,1), dtype = float32)
-    y_tilde = zeros((n_sim,1), dtype = float32)
-    f_tilde = zeros((n_sim,1), dtype = float32)
+    virtual_x = zeros((n_sim,1), dtype = float32)
+    virtual_y = zeros((n_sim,1), dtype = float32)
+    virtual_f = zeros((n_sim,1), dtype = float32)
+    
+    deterministic_dx = zeros((n_sim,1), dtype = float32)
+    deterministic_dy = zeros((n_sim,1), dtype = float32)
+    deterministic_df = zeros((n_sim,1), dtype = float32)
+    
+    stochastic_dx = zeros((n_sim,1), dtype = float32)
+    stochastic_dy = zeros((n_sim,1), dtype = float32)
+    stochastic_df = zeros((n_sim,1), dtype = float32)
+    
+    virtual_deterministic_dx = zeros((n_sim,1), dtype = float32)
+    virtual_deterministic_dy = zeros((n_sim,1), dtype = float32)
+    virtual_deterministic_df = zeros((n_sim,1), dtype = float32)
+    
     
     # Pre-compute constant
     sqrt_2mu_x_D_x_dt = sqrt(2*mu_x*D_x*dt)
@@ -83,20 +96,32 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
     
     mu_x_dt = mu_x*dt
     mu_y_dt = mu_y*dt
-    tau_dt = dt/tau
+    tau_dt  = dt/tau
     
     
     for t in arange(time_steps_amount - 1):
         # Virtual time-step
-        x_tilde[:,] =  x[:,] +mu_x*(- k_x * x[:,] + k_int*y[:,])*dt             +  sqrt_2mu_x_D_x_dt * np.random.randn(n_sim,1)
-        y_tilde[:,] =  y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt       +  sqrt_2mu_y_D_y_dt * np.random.randn(n_sim,1)
-        f_tilde[:,] =  f[:,] +-(f[:,]/tau)*dt                                   +  sqrt_2eps2_dt_tau * np.random.randn(n_sim,1)
         
-        # Real time-step  x + (A + B)/2 = xt -A/2 + B/2 = xt + (B-A)/2
-        # x + A = xt
-        x[:,] = x_tilde[:,] + (  - mu_x_dt*(- k_x * x[:,] + k_int*y[:,])      + mu_x_dt*(- k_x * x_tilde[:,] + k_int*y_tilde[:,])           ) / 2
-        y[:,] = y_tilde[:,] + (  - mu_x_dt*(-k_y*y[:,] + k_int*x[:,] + f[:,]) + mu_y_dt*(-k_y*y_tilde[:,] + k_int*x_tilde[:,] + f_tilde[:,])) / 2
-        f[:,] = f_tilde[:,] + (  - (-f[:,])*tau_dt                            + (-f_tilde[:,])*tau_dt                                       ) / 2
+        deterministic_dx[:,] = ( -k_x * x[:,] + k_int * y[:,] ) * mu_x_dt
+        deterministic_dy[:,] = ( -k_y * y[:,] + k_int * x[:,] + f[:,] ) * mu_y_dt
+        deterministic_df[:,] = -f[:,]*tau_dt
+         
+        stochastic_dx[:,] = sqrt_2mu_x_D_x_dt * np.random.randn(n_sim,1)
+        stochastic_dy[:,] = sqrt_2mu_y_D_y_dt * np.random.randn(n_sim,1)
+        stochastic_df[:,] = sqrt_2eps2_dt_tau * np.random.randn(n_sim,1)
+
+        virtual_x[:,] =  x[:,] + deterministic_dx[:,] +  stochastic_dx[:,]
+        virtual_y[:,] =  y[:,] + deterministic_dy[:,] +  stochastic_dy[:,]
+        virtual_f[:,] =  f[:,] + deterministic_df[:,] +  stochastic_df[:,]
+        
+        virtual_deterministic_dx = ( -k_x * virtual_x[:,] + k_int * virtual_y[:,] ) * mu_x_dt
+        virtual_deterministic_dy = ( -k_y * virtual_y[:,] + k_int * virtual_x[:,] + virtual_f[:,] ) * mu_y_dt
+        virtual_deterministic_df = -virtual_f[:,]*tau_dt
+        
+        # Real time-step  x + (A + B)/2 = x -A/2 + B/2 = x + (B-A)/2
+        x[:,] = virtual_x[:,] + ( virtual_deterministic_dx[:,] - deterministic_dx[:,]) / 2
+        y[:,] = virtual_y[:,] + ( virtual_deterministic_dy[:,] - deterministic_dy[:,]) / 2
+        f[:,] = virtual_f[:,] + ( virtual_deterministic_df[:,] - deterministic_df[:,]) / 2
         
         # Old Euler Code, keep for reference
         # x[:,] = x[:,] + mu_x*(- k_x * x[:,] + k_int*y[:,])*dt      + sqrt(2*mu_x*D_x*dt)   * np.random.randn(n_sim,1)
