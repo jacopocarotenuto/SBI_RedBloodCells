@@ -1,3 +1,5 @@
+import sys
+sys.path.append("./../..")
 from InternalLibrary.SimulatorPackage import SimulationPipeline
 
 simulator_args = {
@@ -6,6 +8,7 @@ simulator_args = {
 # TotalT = 2s, transient_time = 1s
 
 prior_limits = {
+
     "mu_y": [1e4, 140e4],
     "k_y": [1.5e-2, 30e-2],
     "k_int": [1e-3, 6e-3],

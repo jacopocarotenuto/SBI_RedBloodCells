@@ -118,7 +118,7 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
         virtual_deterministic_dy = ( -k_y * virtual_y[:,] + k_int * virtual_x[:,] + virtual_f[:,] ) * mu_y_dt
         virtual_deterministic_df = -virtual_f[:,]*tau_dt
         
-        # Real time-step  x + (A + B)/2 = x -A/2 + B/2 = x + (B-A)/2
+        # Real time-step  x + (A + B)/2 = xt -A/2 + B/2 = xt + (B-A)/2
         x[:,] = virtual_x[:,] + ( virtual_deterministic_dx[:,] - deterministic_dx[:,]) / 2
         y[:,] = virtual_y[:,] + ( virtual_deterministic_dy[:,] - deterministic_dy[:,]) / 2
         f[:,] = virtual_f[:,] + ( virtual_deterministic_df[:,] - deterministic_df[:,]) / 2
@@ -221,7 +221,7 @@ class SimulationPipeline():
         return generator
     
     def _save_batch(self, sim):
-        simulation_folder = "Simulations"
+        simulation_folder = "../../Data/Simulations"
         today_folder = time.strftime("%Y%m%d")
 
         if not os.path.exists(simulation_folder):
