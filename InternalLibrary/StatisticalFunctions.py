@@ -180,7 +180,6 @@ def corr(x,y,nmax,dt=False):
     return corr[:nmax]
 
 
-
 def hermite(x, i):
     std_x = np.std(x)
     z = x/std_x
@@ -189,6 +188,7 @@ def hermite(x, i):
     index[i] = 1
     return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index.tolist())*(2**i*
             np.math.factorial(i)*np.sqrt(np.pi))**-0.5) /np.sqrt(std_x)))
+
 
 def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
     '''
@@ -216,22 +216,22 @@ def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
     return Cxx, Cfx, Cff
 
 
-def stat_corr_single(single_x_trace, DeltaT, t, t_corr):
+def stat_corr_single(single_x_trace, DeltaT):
     '''
     Computes the autocorrelation for a single x trace signal.
 
     INPUT
     singles_x_trace: single x trace signal
     DeltaT: sampling time
-    t: time array
-    t_corr: maximum time for the correlation
+    ((t: time array
+    t_corr: maximum time for the correlation))
 
     OUTPUT
     Cxx: autocorrelation x signal
     '''
 
     sampled_point_amount = single_x_trace.shape[0]
-    idx_corr = where((t>0)*(t<t_corr))[0]
+    #idx_corr = where((t>0)*(t<t_corr))[0]
     Cxx= corr(single_x_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each x trace
 
     return Cxx
@@ -261,6 +261,7 @@ def stat_s_redx(Cxx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
 
     return S_red1, S_red2, S_red
 
+
 def stat_s_redf(Cfx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Computes the reduced energy production for a xf trace signal.
@@ -284,6 +285,7 @@ def stat_s_redf(Cfx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     
     return S_redf
   
+
 def stat_psd(single_trace, nperseg, Sample_frequency):
     '''
     Computes the power spectral density for a single trace signal.
@@ -300,6 +302,7 @@ def stat_psd(single_trace, nperseg, Sample_frequency):
     frequencies, psd = welch(single_trace, fs=Sample_frequency, nperseg=nperseg)
     return psd
 
+
 def stat_psd_mean(single_trace, nperseg, Sample_frequency):
     _ , psd = welch(single_trace, fs=Sample_frequency, nperseg=nperseg)
     return np.array([mean(psd), np.std(psd)])
@@ -315,12 +318,15 @@ def stat_timeseries(single_timeseries):
     OUTPUT
     s: summary statistics
     '''
-    statistics_functions = [mean, var, median, max, min]
-    s = zeros((len(statistics_functions)))
+    statistics_functions = [[mean, var, median, max, min], 
+                            [lambda x: hermite(x, i) for i in range(1, 6)]]
+    # s = zeros((len(statistics_functions)))
 
-    for j, func in enumerate(statistics_functions):
-        s[j] = func(single_timeseries)
+    # for j, func in enumerate(statistics_functions):
+    #     s[j] = func(single_timeseries)
 
+    results = [func(single_timeseries) for l in statistics_functions for func in l]
+    s = np.concatenate([results])
     return s
 
 def stat_hermite(x):
