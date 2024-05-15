@@ -90,8 +90,8 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
     
     
     # Pre-compute constant
-    sqrt_2mu_x_D_x_dt = sqrt(2*mu_x*D_x*dt)
-    sqrt_2mu_y_D_y_dt = sqrt(2*mu_y*D_y*dt)
+    sqrt_2_D_x_dt = sqrt(2*D_x*dt)
+    sqrt_2_D_y_dt = sqrt(2*D_y*dt)
     sqrt_2eps2_dt_tau = sqrt(2*eps**2*dt/tau)
     
     mu_x_dt = mu_x*dt
@@ -106,8 +106,8 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
         deterministic_dy[:,] = ( -k_y * y[:,] + k_int * x[:,] + f[:,] ) * mu_y_dt
         deterministic_df[:,] = -f[:,]*tau_dt
          
-        stochastic_dx[:,] = sqrt_2mu_x_D_x_dt * np.random.randn(n_sim,1)
-        stochastic_dy[:,] = sqrt_2mu_y_D_y_dt * np.random.randn(n_sim,1)
+        stochastic_dx[:,] = sqrt_2_D_x_dt * np.random.randn(n_sim,1)
+        stochastic_dy[:,] = sqrt_2_D_y_dt * np.random.randn(n_sim,1)
         stochastic_df[:,] = sqrt_2eps2_dt_tau * np.random.randn(n_sim,1)
 
         virtual_x[:,] =  x[:,] + deterministic_dx[:,] +  stochastic_dx[:,]
@@ -124,8 +124,8 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
         f[:,] = virtual_f[:,] + ( virtual_deterministic_df[:,] - deterministic_df[:,]) / 2
         
         # Old Euler Code, keep for reference
-        # x[:,] = x[:,] + mu_x*(- k_x * x[:,] + k_int*y[:,])*dt      + sqrt(2*mu_x*D_x*dt)   * np.random.randn(n_sim,1)
-        # y[:,] = y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt + sqrt(2*mu_y*D_y*dt)   * np.random.randn(n_sim,1)
+        # x[:,] = x[:,] + mu_x*(- k_x * x[:,] + k_int*y[:,])*dt      + sqrt(2*D_x*dt)   * np.random.randn(n_sim,1)
+        # y[:,] = y[:,] + mu_y*(-k_y*y[:,] + k_int*x[:,] + f[:,])*dt + sqrt(2*D_y*dt)   * np.random.randn(n_sim,1)
         # f[:,] = f[:,] + -(f[:,]/tau)*dt                            + sqrt(2*eps**2*dt/tau) * np.random.randn(n_sim,1)
 
         sampling_counter = sampling_counter + 1
@@ -139,6 +139,7 @@ def Simulator_noGPU(dt, DeltaT, TotalT, theta, transient_time = 0,  i_state = No
             
 
     return x_trace, y_trace, f_trace # Check if this is right
+
 
 def CheckParameters(dt, DeltaT, TotalT, theta):
     '''

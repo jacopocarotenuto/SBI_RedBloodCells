@@ -372,19 +372,27 @@ def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
 def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
-    t_corr = TotalT/50 # Hyperparameter
+    t_corr = TotalT/500 # Hyperparameter
     
     # Autocorrelation
-    Cxx = stat_corr_single(single_x_trace, DeltaT, t, t_corr)
+    Cxx = stat_corr_single(single_x_trace, DeltaT)
     idx_corr = where((t>0)*(t<t_corr))[0]
     cxx = Cxx[idx_corr]
-    summary_statistics["Cxx"] = cxx
+    summary_statistics["Cxx"] = cxx  
+
+    idx_clean_corr = np.linspace(0, len(cxx)-1, 500, dtype=np.int32)
+    idx_clean_corr_log = np.logspace(0, np.log10(len(cxx)-1), 20, dtype=np.int32)
+    summary_statistics["Cxx_cl_lin"] = cxx[idx_clean_corr]
+    summary_statistics["Cxx_cl_log"] = cxx[idx_clean_corr_log]
     
     # S red
     S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
     summary_statistics["s_red1"] = S_red1
     summary_statistics["s_red2"] = S_red2
     summary_statistics["s_redx"] = S_red 
+
+    summary_statistics["s_redx_cl_lin"] = S_red[idx_clean_corr]
+    summary_statistics["s_redx_cl_log"] = S_red[idx_clean_corr_log]
     
     # Power spectral density
     psdx = stat_psd(single_x_trace, nperseg=1000, Sample_frequency=1/DeltaT)
