@@ -398,7 +398,7 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     summary_statistics["hermite"] = stat_hermite(single_x_trace)
 
     # Cxx decomposition in Hermite Coefficients
-    summary_statistics["modes"] = stat_mode(cxx, 1e-6, mean(psdx))
+    summary_statistics["modes"] = stat_mode(Cxx, 1e-6, mean(psdx))
 
     # Tucci's summary statistics
     summary_statistics["tucci"] = stat_Tucci(single_x_trace, 1000, 1/DeltaT, cxx, 1e-6, mean(psdx))
