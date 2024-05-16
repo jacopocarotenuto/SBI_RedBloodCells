@@ -43,7 +43,7 @@ def GetSummaryStatisticsParallel(file_to_analyze, cores=-1):
 
 def AnalyzeFile(file):
     # Check if the SummaryStatistics has already been computed
-    if file in "../../Data/SummaryStatistics":
+    if file in os.path.join("../../Data/SummaryStatistics", file):
         print("The summary statistics of " + file + " has already been computed.")
         return
 
