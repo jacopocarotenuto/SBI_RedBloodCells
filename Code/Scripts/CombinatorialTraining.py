@@ -1,3 +1,5 @@
+import sys
+sys.path.append("./../..")
 from InternalLibrary.StatisticalFunctions import *
 import numpy as np
 import os
@@ -5,6 +7,9 @@ from sbi.utils.user_input_checks import process_prior
 from sbi.inference import SNPE, infer
 import itertools
 import _pickle as pickle
+import torch
+from sbi import utils as utils
+import time as time
 
 n_files = [75, 100, 120, -1]
 selected_stats = [["s_redx"], ["s_redx_cl_lin"], ["s_redx_cl_log"], ["Cxx", "s_redx"], ["Cxx_cl_lin", "s_redx_cl_lin"], ["Cxx", "s_redx", "tucci"], ["Cxx_cl_lin", "s_redx_cl_lin", "tucci"], ["tucci"], ["s_red2", "Cxx"], ["ts_psdx", "tucci"]]
@@ -70,10 +75,12 @@ def train_sbi(n_files, selected_stats, learning_rate, batch_size, num_atoms):
 comb = list(itertools.product(n_files, selected_stats, learning_rate, batch_size, num_atoms))
 performance = []
 for i in range(len(comb)):
+    start = time.time()
     print(f"Combination {i+1}/{len(comb)}: {comb[i]}")
     n_files, selected_stats, learning_rate, batch_size, num_atoms = comb[i]
     results = train_sbi(n_files, selected_stats, learning_rate, batch_size, num_atoms)
-    print("Performance: ", results[1]["best_validation_log_prob"])
+    stop = time.time()
+    print("Performance: ", results[1]["best_validation_log_prob"], " ; Iteration time: ", stop-start)
     performance.append([comb[i], results])
 
 
