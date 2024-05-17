@@ -28,6 +28,8 @@ def rescale_theta(theta_torch, prior_limits):
 
 
 def train_sbi(n_files, selected_stats, learning_rate, batch_size, num_atoms):
+    prior_limits = {"mu_y": [1e4, 140e4],"k_y": [1.5e-2, 30e-2],"k_int": [1e-3, 6e-3],"tau": [2e-2, 20e-2],"eps": [0.5, 6],}
+    
     # Get the files
     files = [os.path.join(root, file)
         for root, _, files in os.walk("../../Data/SummaryStatistics/")
@@ -53,11 +55,11 @@ def train_sbi(n_files, selected_stats, learning_rate, batch_size, num_atoms):
     theta_tot_norm = rescale_theta(theta_tot, prior_limits)
 
     # Train the model and evaluate performance
-    prior_limits = {"mu_y": [1e4, 140e4],"k_y": [1.5e-2, 30e-2],"k_int": [1e-3, 6e-3],"tau": [2e-2, 20e-2],"eps": [0.5, 6],}
     prior_box = utils.torchutils.BoxUniform(low=torch.tensor([-0.5]*len(prior_limits)), high=torch.tensor([0.5]*len(prior_limits)))
     best = 0
     for i in range(5):
         prior, num_parameters, prior_returns_numpy = process_prior(prior_box)
+        infer = SNPE(prior=prior)
         inferece = infer.append_simulations(theta_tot_norm, s_tot)
         density_estimator = infer.train(num_atoms=num_atoms, show_train_summary=False, 
                                     training_batch_size=batch_size, learning_rate=learning_rate) 
