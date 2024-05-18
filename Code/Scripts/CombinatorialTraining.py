@@ -15,7 +15,11 @@ from skopt.space import Categorical
 
 # Define the space for the optimization
 n_files = [75, 100, 120, -1]
-selected_stats = [["s_redx"], ["s_redx_cl_lin"], ["s_redx_cl_log"], ["Cxx", "s_redx"], ["Cxx_cl_lin", "s_redx_cl_lin"], ["Cxx", "s_redx", "tucci"], ["Cxx_cl_lin", "s_redx_cl_lin", "tucci"], ["tucci"], ["s_red2", "Cxx"], ["ts_psdx", "tucci"]]
+selected_stats = [
+    ("s_redx",), ("s_redx_cl_lin",), ("s_redx_cl_log",), 
+    ("Cxx", "s_redx"), ("Cxx_cl_lin", "s_redx_cl_lin"), 
+    ("Cxx", "s_redx", "tucci"), ("Cxx_cl_lin", "s_redx_cl_lin", "tucci"), 
+    ("tucci",), ("s_red2", "Cxx"), ("ts_psdx", "tucci")]
 learning_rate = [0.005, 0.0005, 0.00005]
 batch_size = [20, 50, 200, 500, 1000]
 num_atoms = [5, 10, 20, 50]
