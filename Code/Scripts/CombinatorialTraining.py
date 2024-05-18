@@ -10,14 +10,26 @@ import _pickle as pickle
 import torch
 from sbi import utils as utils
 import time as time
+from skopt import gp_minimize
+from skopt.space import Categorical
 
+# Define the space for the optimization
 n_files = [75, 100, 120, -1]
 selected_stats = [["s_redx"], ["s_redx_cl_lin"], ["s_redx_cl_log"], ["Cxx", "s_redx"], ["Cxx_cl_lin", "s_redx_cl_lin"], ["Cxx", "s_redx", "tucci"], ["Cxx_cl_lin", "s_redx_cl_lin", "tucci"], ["tucci"], ["s_red2", "Cxx"], ["ts_psdx", "tucci"]]
 learning_rate = [0.005, 0.0005, 0.00005]
 batch_size = [20, 50, 200, 500, 1000]
 num_atoms = [5, 10, 20, 50]
 
+space = [
+    Categorical(n_files, name='n_files'),
+    Categorical(selected_stats, name='selected_stats'),
+    Categorical(learning_rate, name='learning_rate'),
+    Categorical(batch_size, name='batch_size'),
+    Categorical(num_atoms, name='num_atoms')
+]
 
+
+# Helper function
 def rescale_theta(theta_torch, prior_limits):
     theta_torch2 = theta_torch.clone()
     prior_limits_list = get_prior_limit_list(prior_limits)
@@ -27,7 +39,9 @@ def rescale_theta(theta_torch, prior_limits):
     return theta_torch2
 
 
-def train_sbi(n_files, selected_stats, learning_rate, batch_size, num_atoms):
+# Loss function
+def train_sbi(params):
+    n_files, selected_stats, learning_rate, batch_size, num_atoms = params
     prior_limits = {"mu_y": [1e4, 140e4],"k_y": [1.5e-2, 30e-2],"k_int": [1e-3, 6e-3],"tau": [2e-2, 20e-2],"eps": [0.5, 6],}
     
     # Get the files
@@ -64,28 +78,31 @@ def train_sbi(n_files, selected_stats, learning_rate, batch_size, num_atoms):
         density_estimator = infer.train(num_atoms=num_atoms, show_train_summary=False, 
                                     training_batch_size=batch_size, learning_rate=learning_rate) 
         posterior = infer.build_posterior(density_estimator)
-        best_i = infer.summary["best_validation_log_prob"]
+        best_i = infer.summary["best_validation_log_prob"][0]
         if best_i > best:
             best = best_i
-            posterior_best = posterior
-            inference_best = infer
     
-    return (posterior_best, inference_best)
+    # Return the loss function
+    return -best
 
 
-# Make the combinatorial
-comb = list(itertools.product(n_files, selected_stats, learning_rate, batch_size, num_atoms))
-performance = []
-for i in range(len(comb)):
-    start = time.time()
-    print(f"Combination {i+1}/{len(comb)}: {comb[i]}")
-    n_files, selected_stats, learning_rate, batch_size, num_atoms = comb[i]
-    results = train_sbi(n_files, selected_stats, learning_rate, batch_size, num_atoms)
-    stop = time.time()
-    print("Performance: ", results[1]["best_validation_log_prob"], " ; Iteration time: ", stop-start)
-    performance.append([comb[i], results])
+# Make the combinatorial (the hard way)
+# comb = list(itertools.product(n_files, selected_stats, learning_rate, batch_size, num_atoms))
+# performance = []
+# for i in range(len(comb)):
+#     start = time.time()
+#     print(f"Combination {i+1}/{len(comb)}: {comb[i]}")
+#     n_files, selected_stats, learning_rate, batch_size, num_atoms = comb[i]
+#     results = train_sbi(n_files, selected_stats, learning_rate, batch_size, num_atoms)
+#     stop = time.time()
+#     print("Loss: ", result, " ; Iteration time: ", stop-start)
+#     performance.append([comb[i], results])
+
+
+# Optimize the hyperparameters
+results = gp_minimize(train_sbi, space, n_calls=50, random_state=0, n_jobs=-1, verbose=True)
 
 
 # Save the results
 with open("./CombinatorialTraining.pkl", "wb") as f:
-    pickle.dump(performance, f)
+    pickle.dump(results, f)
