@@ -17,9 +17,9 @@ from skopt.space import Categorical
 n_files = [75, 100, 120, -1]
 selected_stats = [
     ("s_redx",), ("s_redx_cl_lin",), ("s_redx_cl_log",), 
-    ("Cxx", "s_redx"), ("Cxx_cl_lin", "s_redx_cl_lin"), 
-    ("Cxx", "s_redx", "tucci"), ("Cxx_cl_lin", "s_redx_cl_lin", "tucci"), 
-    ("tucci",), ("s_red2", "Cxx"), ("ts_psdx", "tucci")]
+    ("Cxx", "s_redx",), ("Cxx_cl_lin", "s_redx_cl_lin",), 
+    ("Cxx", "s_redx", "tucci",), ("Cxx_cl_lin", "s_redx_cl_lin", "tucci",), 
+    ("tucci",), ("s_red2", "Cxx",), ("ts_psdx", "tucci",)]
 learning_rate = [0.005, 0.0005, 0.00005]
 batch_size = [20, 50, 200, 500, 1000]
 num_atoms = [5, 10, 20, 50]
@@ -46,12 +46,13 @@ def rescale_theta(theta_torch, prior_limits):
 # Loss function
 def train_sbi(params):
     n_files, selected_stats, learning_rate, batch_size, num_atoms = params
+    print("Trying: ", n_files, selected_stats, learning_rate, batch_size, num_atoms)
     prior_limits = {"mu_y": [1e4, 140e4],"k_y": [1.5e-2, 30e-2],"k_int": [1e-3, 6e-3],"tau": [2e-2, 20e-2],"eps": [0.5, 6],}
     
     # Get the files
     files = [os.path.join(root, file)
         for root, _, files in os.walk("../../Data/SummaryStatistics/")
-        for file in files][:n_files]
+        for file in files][1:n_files]
     z_score = True
     
     # Compute the tensors for the training
@@ -75,7 +76,7 @@ def train_sbi(params):
     # Train the model and evaluate performance
     prior_box = utils.torchutils.BoxUniform(low=torch.tensor([-0.5]*len(prior_limits)), high=torch.tensor([0.5]*len(prior_limits)))
     best = 0
-    for i in range(5):
+    for i in range(1):
         prior, num_parameters, prior_returns_numpy = process_prior(prior_box)
         infer = SNPE(prior=prior)
         inferece = infer.append_simulations(theta_tot_norm, s_tot)
@@ -85,7 +86,12 @@ def train_sbi(params):
         best_i = infer.summary["best_validation_log_prob"][0]
         if best_i > best:
             best = best_i
-    
+
+    # Write on file    
+    with open("./CombinatorialTraining.txt", "a") as f:
+        f.write(f"Parameters: {params}\n")
+        f.write(f"Loss: {-best}\n")
+
     # Return the loss function
     return -best
 
@@ -104,7 +110,7 @@ def train_sbi(params):
 
 
 # Optimize the hyperparameters
-results = gp_minimize(train_sbi, space, n_calls=50, random_state=0, n_jobs=-1, verbose=True)
+results = gp_minimize(train_sbi, space, n_calls=30, random_state=0, n_jobs=-1, verbose=True)
 
 
 # Save the results

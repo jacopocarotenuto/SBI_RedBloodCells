@@ -372,7 +372,7 @@ def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
 def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
-    t_corr = TotalT/300 # Hyperparameter
+    t_corr = TotalT/20 # Hyperparameter
     
     # Autocorrelation
     Cxx = stat_corr_single(single_x_trace, DeltaT)
