@@ -124,13 +124,13 @@ with open("./CombinatorialTraining.pkl", "wb") as f:
 
 
 # In this second part, we perform a scan over some parameters
-cl_sizes = [3, 5, 10, 15, 20, 25, 50, 100, 200, 500]
+cl_sizes = [3, 5, 10, 15, 20, 25, 50, 100, 200, 500, 1000]
 selected_stats = [["Cxx"], ["Cxx", "s_redx"], ["s_redx"], ["Cxx", "s_red2"], ["Cxx", "s_redx", "tucci"]]
 
 
 def train_sbi(selected_stats, cl_lin, cl_log):
     prior_limits = {"mu_y": [1e4, 140e4],"k_y": [1.5e-2, 30e-2],"k_int": [1e-3, 6e-3],"tau": [2e-2, 20e-2],"eps": [0.5, 6],}
-    num_atoms = 10; learning_rate = 0.0005; batch_size=1000
+    num_atoms = 20; learning_rate = 0.005; batch_size=500
 
     print("Using ", selected_stats, "; cl_lin = ", cl_lin, "; cl_log = ", cl_log)
 
