@@ -132,8 +132,6 @@ def train_sbi(selected_stats, cl_lin, cl_log):
     prior_limits = {"mu_y": [1e4, 140e4],"k_y": [1.5e-2, 30e-2],"k_int": [1e-3, 6e-3],"tau": [2e-2, 20e-2],"eps": [0.5, 6],}
     num_atoms = 20; learning_rate = 0.005; batch_size=500
 
-    print("Using ", selected_stats, "; cl_lin = ", cl_lin, "; cl_log = ", cl_log)
-
     # Get the files
     files = [os.path.join(root, file)
         for root, _, files in os.walk("../../Data/SummaryStatistics/")
@@ -171,8 +169,8 @@ def train_sbi(selected_stats, cl_lin, cl_log):
         best_i = infer.summary["best_validation_log_prob"][0]
         if best_i > best:
             best = best_i
-
-    print("Loss function: ", -best)
+    
+    print("Using ", selected_stats, "; cl_lin = ", cl_lin, "; cl_log = ", cl_log, "; Loss function: ", -best)
     # Return the loss function
     return -best
 
