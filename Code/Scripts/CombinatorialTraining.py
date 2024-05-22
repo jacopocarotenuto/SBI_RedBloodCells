@@ -124,7 +124,7 @@ with open("./CombinatorialTraining.pkl", "wb") as f:
 
 
 # In this second part, we perform a scan over some parameters
-cl_sizes = [3, 5, 10, 15, 20, 25, 50, 100, 200, 500, 1000]
+cl_sizes = [3, 5, 10, 20, 30, 50, 100, 200, 500]
 selected_stats = [["Cxx"], ["Cxx", "s_redx"], ["s_redx"], ["Cxx", "s_red2"], ["Cxx", "s_redx", "tucci"]]
 
 
@@ -175,43 +175,42 @@ def train_sbi(selected_stats, cl_lin, cl_log):
     return -best
 
 
-# # Two for loops approach
-# cl_lin_results = np.zeros((len(selected_stats), len(cl_sizes)))
-# cl_log_results = np.zeros((len(selected_stats), len(cl_sizes)))
-    
-# for s, stats in enumerate(selected_stats):
-#     for c, size in enumerate(cl_sizes):
-#         # Linear subsample
-#         res = train_sbi(stats, cl_lin=size, cl_log=-1)
-#         cl_lin_results[s, c] = res
-#         # Log subsample
-#         res = train_sbi(stats, cl_lin=-1, cl_log=size)
-#         cl_log_results[s, c] = res
-
-
-# Define your function to run in parallel
-def parallel_task(params):
-    s, stats, c, size = params
-    lin_result = train_sbi(stats, cl_lin=size, cl_log=-1)
-    log_result = train_sbi(stats, cl_lin=-1, cl_log=size)
-    return s, c, lin_result, log_result
-
-# Initialize your variables
+# Two for loops approach
 cl_lin_results = np.zeros((len(selected_stats), len(cl_sizes)))
 cl_log_results = np.zeros((len(selected_stats), len(cl_sizes)))
+    
+for s, stats in enumerate(selected_stats):
+    for c, size in enumerate(cl_sizes):
+        a = time.time()
+        # Linear subsample
+        res = train_sbi(stats, cl_lin=size, cl_log=-1)
+        cl_lin_results[s, c] = res
+        # Log subsample
+        res = train_sbi(stats, cl_lin=-1, cl_log=size)
+        cl_log_results[s, c] = res
+        b = time.time()
+        print("Time taken: ", b-a)
 
-# Prepare the parameters for parallel execution
-params = [(s, stats, c, size) for s, stats in enumerate(selected_stats) for c, size in enumerate(cl_sizes)]
 
-# Use ProcessPool to execute the tasks in parallel
-cores = multiprocessing.cpu_count()
-with ProcessPool(nodes=cores) as pool:
-    results = pool.map(parallel_task, params)
-
-# Store the results
-for s, c, lin_result, log_result in results:
-    cl_lin_results[s, c] = lin_result
-    cl_log_results[s, c] = log_result
+# # Define your function to run in parallel
+# def parallel_task(params):
+#     s, stats, c, size = params
+#     lin_result = train_sbi(stats, cl_lin=size, cl_log=-1)
+#     log_result = train_sbi(stats, cl_lin=-1, cl_log=size)
+#     return s, c, lin_result, log_result
+# # Initialize your variables
+# cl_lin_results = np.zeros((len(selected_stats), len(cl_sizes)))
+# cl_log_results = np.zeros((len(selected_stats), len(cl_sizes)))
+# # Prepare the parameters for parallel execution
+# params = [(s, stats, c, size) for s, stats in enumerate(selected_stats) for c, size in enumerate(cl_sizes)]
+# # Use ProcessPool to execute the tasks in parallel
+# cores = multiprocessing.cpu_count()
+# with ProcessPool(nodes=cores) as pool:
+#     results = pool.map(parallel_task, params)
+# # Store the results
+# for s, c, lin_result, log_result in results:
+#     cl_lin_results[s, c] = lin_result
+#     cl_log_results[s, c] = log_result
 
 
 # Save the results in pickles
