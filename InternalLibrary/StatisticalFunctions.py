@@ -418,6 +418,7 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
 
 
 def select_summary_statistics(summary_statistics, selected_statistics, z_score=False, cl_lin=-1, cl_log=-1):
+    selected_statistics = selected_statistics.copy()
     # Check that the selected statistics are in the summary statistics
     assert set(selected_statistics).issubset(set(summary_statistics.keys()))
     "The selected statistics are not in the summary statistics"
@@ -472,6 +473,8 @@ def select_summary_statistics(summary_statistics, selected_statistics, z_score=F
     return selected_summary_statistics
 
 
+# Helper function to rescale the parameters
+## Please, note that you need also to change the prior limits in the model
 def rescale_theta(theta_torch, prior_limits):
     theta_torch2 = theta_torch.clone()
     
