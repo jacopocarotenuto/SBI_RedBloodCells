@@ -129,7 +129,7 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8
 
         # Compute the entropy production
         S_x = sum((x_trace[i][1:] - x_trace[i][:-1]) * F_x[:-1] / t)
-        S_y = sum((f_trace[i][1:] - f_trace[i][:-1]) * F_y[:-1] / t)
+        S_y = sum((y_trace[i][1:] - y_trace[i][:-1]) * F_y[:-1] / t)
         S = S_x + S_y
         S_tot.append(S)
     
