@@ -372,7 +372,7 @@ def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
 def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
-    t_corr = TotalT/300 # Hyperparameter
+    t_corr = TotalT/20 # Hyperparameter
     
     # Autocorrelation
     Cxx = stat_corr_single(single_x_trace, DeltaT)
@@ -417,10 +417,39 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     return summary_statistics
 
 
-def select_summary_statistics(summary_statistics, selected_statistics, z_score=False):
+def select_summary_statistics(summary_statistics, selected_statistics, z_score=False, cl_lin=-1, cl_log=-1):
+    selected_statistics = selected_statistics.copy()
+    # Check that the selected statistics are in the summary statistics
     assert set(selected_statistics).issubset(set(summary_statistics.keys()))
     "The selected statistics are not in the summary statistics"
 
+    assert cl_log < 0 or cl_lin < 0, "You cannot subsample bot 'lin' and 'log' at the same time"
+
+    # Post-subselection of Cxx and s_redx
+    if cl_lin > 0:
+        idx_clean_corr = np.linspace(0, len(summary_statistics["Cxx"])-1, cl_lin, dtype=np.int32)
+        if "Cxx" in selected_statistics:
+            summary_statistics["Cxx"] = summary_statistics["Cxx"][idx_clean_corr]
+        if "s_redx" in selected_statistics:
+            summary_statistics["s_redx"] = summary_statistics["s_redx"][idx_clean_corr]
+        if "s_red1" in selected_statistics:
+            summary_statistics["s_red1"] = summary_statistics["s_red1"][idx_clean_corr]
+        if "s_red2" in selected_statistics:
+            summary_statistics["s_red2"] = summary_statistics["s_red2"][idx_clean_corr]
+
+    if cl_log > 0:
+        idx_clean_corr = np.logspace(0, np.log10(len(summary_statistics["Cxx"])-1), cl_log, dtype=np.int32)
+        if "Cxx" in selected_statistics:
+            summary_statistics["Cxx"] = summary_statistics["Cxx"][idx_clean_corr]
+        if "s_redx" in selected_statistics:
+            summary_statistics["s_redx"] = summary_statistics["s_redx"][idx_clean_corr]
+        if "s_red1" in selected_statistics:
+            summary_statistics["s_red1"] = summary_statistics["s_red1"][idx_clean_corr]
+        if "s_red2" in selected_statistics:
+            summary_statistics["s_red2"] = summary_statistics["s_red2"][idx_clean_corr]
+
+
+    # Check if theta is selected for testing reasons
     theta_selected = False
     if "theta" in selected_statistics:
         theta_selected = True
@@ -431,16 +460,19 @@ def select_summary_statistics(summary_statistics, selected_statistics, z_score=F
         list_of_statistics = [torch.tensor(zscore(summary_statistics[i])) for i in selected_statistics]
     else:   
         list_of_statistics = [torch.tensor(summary_statistics[i]) for i in selected_statistics]
-    #print([i.size() for i in list_of_statistics])
     selected_summary_statistics = torch.cat(list_of_statistics, dim=0)
     selected_summary_statistics = torch.unsqueeze(selected_summary_statistics, 0)
 
+    # Add theta to the summary statistics if selected
     if theta_selected:
         theta = torch.tensor(summary_statistics["theta"])
         selected_summary_statistics = torch.cat((selected_summary_statistics, theta.T), dim=1)
 
+    # Convert the summary statistics to float32 (required for sbi)
     selected_summary_statistics = selected_summary_statistics.to(torch.float32)
     return selected_summary_statistics
+
+
 
 def statistics_from_file(max_files_to_analyze=10):
     folders_inside_statistics = os.listdir("SummaryStatistics")
