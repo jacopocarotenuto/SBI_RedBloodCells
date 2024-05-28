@@ -487,6 +487,29 @@ def select_summary_statistics(summary_statistics, selected_statistics, z_score=F
     return selected_summary_statistics
 
 
+# Helper function to rescale the parameters
+## Please, note that you need also to change the prior limits in the model
+def rescale_theta(theta_torch, prior_limits):
+    theta_torch2 = theta_torch.clone()
+    
+    prior_limits_list = get_prior_limit_list(prior_limits)
+    
+    for i in range(theta_torch.shape[1]):
+        prior_interval = prior_limits_list[i]
+        theta_torch2[:, i] = (theta_torch2[:, i] - np.mean(prior_interval))/(prior_interval[1]-prior_interval[0])
+    
+    return theta_torch2
+
+def rescale_theta_inv(theta_torch, prior_limits):
+    theta_torch2 = theta_torch.clone()
+    
+    prior_limits_list = get_prior_limit_list(prior_limits)
+    
+    for i in range(theta_torch.shape[1]):
+        prior_interval = prior_limits_list[i]
+        theta_torch2[:, i] = theta_torch2[:, i]*(prior_interval[1]-prior_interval[0]) + np.mean(prior_interval)
+    return theta_torch2
+
 
 def statistics_from_file(max_files_to_analyze=10):
     folders_inside_statistics = os.listdir("SummaryStatistics")
