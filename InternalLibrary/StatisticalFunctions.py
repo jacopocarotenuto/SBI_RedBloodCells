@@ -30,8 +30,18 @@ def get_theta_from_prior(prior_limits, n_sim):
     # Get parameters drawn from the prior
     theta = [np.random.uniform(prior_limits[i][0], prior_limits[i][1], size=(n_sim, 1)) for i in prior_limits]
     theta_numpy = np.array(theta)
-    theta_torch = torch.from_numpy(theta_numpy[:, :, 0]).to(torch.float32)
+    
+    theta_numpy = theta_numpy[:,theta[1] * 0.006 > theta[2]**2]
+    theta_numpy = theta_numpy.reshape(5, theta_numpy.shape[1],1)
 
+    miss = n_sim - theta_numpy.shape[1]
+    if miss > 0:
+        replacement = get_theta_from_prior(prior_limits, miss)
+        theta_numpy = np.concatenate((theta_numpy, replacement), axis=1)
+        theta_torch = torch.from_numpy(theta_numpy[:, :, 0]).to(torch.float32)
+    else:
+        theta_torch = torch.from_numpy(theta_numpy[:, :, 0]).to(torch.float32)
+    
     return theta_numpy, theta_torch
 
 
