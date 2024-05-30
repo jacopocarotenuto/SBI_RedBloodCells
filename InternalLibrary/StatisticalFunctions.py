@@ -134,8 +134,8 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8
         # Compute the force
         F_x = - k_x * x + k_int * y
         F_y = - k_y * y + k_int * x + f
-        F_xs = (F_x[1:] + F_x[:-1])/ 2*t
-        F_ys = (F_y[1:] + F_y[:-1])/ 2*t
+        F_xs = (F_x[1:] + F_x[:-1])/ (2*t)
+        F_ys = (F_y[1:] + F_y[:-1])/ (2*t)
         Fx.append(F_xs)
         Fy.append(F_ys)
 
