@@ -565,8 +565,7 @@ def stat_fit_cxx(Cxx, t, function = None):
     
     if n_sim != 1:
         for i in np.arange(n_sim):
-            x = np.arange(0,Cxx.shape[1]*dt, dt)
-            popt, pcov = curve_fit(function, x, Cxx[i,:])
+            popt, pcov = curve_fit(function, t, Cxx[i,:])
             output[i,:] = popt
     else:
         x = np.arange(0,Cxx.shape[1]*dt, dt)
