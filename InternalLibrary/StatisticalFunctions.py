@@ -535,7 +535,12 @@ def stat_fit_sredx(sredx, t, t_corr, function = None):
     if function is None:
         def function(x, a, b, c, d):
             return 1e4*(a*np.exp(-b*x) + c/x + d)
-    n_sim = sredx.shape[0]
+        
+    if len(sredx.shape) == 1:
+        n_sim = 1
+    else:
+        n_sim = np.min(sredx.shape)
+        
     t = t[(t>0)*(t<t_corr)]
     sredx_fit = np.zeros((n_sim, 4))
     if n_sim != 1:
@@ -554,7 +559,10 @@ def stat_fit_cxx(Cxx, t, t_corr = 0, function = None):
     """
     Fit an exponential function to the autocorrelation functions with formula a*exp(-b*x)
     """
-    n_sim = Cxx.shape[0]
+    if len(Cxx.shape) == 1:
+        n_sim = 1
+    else:
+        n_sim = np.min(Cxx.shape)
     if function is None:
         def function(x, a, b):
             return a * np.exp(-b * x)
