@@ -97,7 +97,7 @@ def ComputeTheoreticalEntropy(theta, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     return sigmas, sigma_mean
 
 
-def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8e4, k_x=6e-3, kbT=4.11):
+def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, dt, mu_x=2.8e4, k_x=6e-3, kbT=4.11):
     '''
     Compute the entropy production for the given traces and parameters
     
@@ -134,20 +134,19 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8
         # Compute the force
         F_x = - k_x * x + k_int * y
         F_y = - k_y * y + k_int * x + f
-        F_xs = (F_x[1:] + F_x[:-1])/ (2*t)
-        F_ys = (F_y[1:] + F_y[:-1])/ (2*t)
+        F_xs = (F_x[1:] + F_x[:-1])/ (2*dt)
+        F_ys = (F_y[1:] + F_y[:-1])/ (2*dt)
         Fx.append(F_xs)
         Fy.append(F_ys)
 
         # Compute the entropy production
-        S_x = sum((x[1:] - x[:-1]) * F_xs)
-        S_y = sum((y[1:] - y[:-1]) * F_ys)
+        S_x = mean((x[1:] - x[:-1]) * F_xs)
+        S_y = mean((y[1:] - y[:-1]) * F_ys)
         S = S_x + S_y
         S_tot.append(S)
     
     S_mean = mean(S_tot)
     return S_mean, array(Fx), array(Fy), array(S_tot)
-
 
 
 
