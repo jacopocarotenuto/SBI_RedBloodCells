@@ -530,54 +530,54 @@ def statistics_from_file(max_files_to_analyze=10):
             yield pickle.load(f)
 
 
-def stat_fit_sredx(sredx, t, t_corr, function = None):
-    if function is None:
-        def function(x, a, b, c, d):
-            return 1e4*(a*np.exp(-b*x) + c/x + d)
+# def stat_fit_sredx(sredx, t, t_corr, function = None):
+#     if function is None:
+#         def function(x, a, b, c, d):
+#             return 1e4*(a*np.exp(-b*x) + c/x + d)
         
-    if len(sredx.shape) == 1:
-        n_sim = 1
-    else:
-        n_sim = np.min(sredx.shape)
+#     if len(sredx.shape) == 1:
+#         n_sim = 1
+#     else:
+#         n_sim = np.min(sredx.shape)
         
-    t = t[(t>0)*(t<t_corr)]
-    sredx_fit = np.zeros((n_sim, 4))
-    if n_sim != 1:
-        for i in np.arange(n_sim):
-            popt, _ = curve_fit(function, t, sredx[i], p0 = [1.,1.,1.,1.],maxfev=1000000, bounds=([-10,0,0,0],[10,np.inf,np.inf,np.inf]))
-            sredx_fit[i] = popt
-    else:
-        popt, _ = curve_fit(function, t, sredx, p0 = [1.,1.,1.,1.],maxfev=1000000)
-        sredx_fit[0] = popt
+#     t = t[(t>0)*(t<t_corr)]
+#     sredx_fit = np.zeros((n_sim, 4))
+#     if n_sim != 1:
+#         for i in np.arange(n_sim):
+#             popt, _ = curve_fit(function, t, sredx[i], p0 = [1.,1.,1.,1.],maxfev=1000000, bounds=([-10,0,0,0],[10,np.inf,np.inf,np.inf]))
+#             sredx_fit[i] = popt
+#     else:
+#         popt, _ = curve_fit(function, t, sredx, p0 = [1.,1.,1.,1.],maxfev=1000000)
+#         sredx_fit[0] = popt
         
-    return sredx_fit, t
+#     return sredx_fit, t
 
 
 
-def stat_fit_cxx(Cxx, t, t_corr = 0, function = None):
-    """
-    Fit an exponential function to the autocorrelation functions with formula a*exp(-b*x)
-    """
-    if len(Cxx.shape) == 1:
-        n_sim = 1
-    else:
-        n_sim = np.min(Cxx.shape)
-    if function is None:
-        def function(x, a, b):
-            return a * np.exp(-b * x)
+# def stat_fit_cxx(Cxx, t, t_corr = 0, function = None):
+#     """
+#     Fit an exponential function to the autocorrelation functions with formula a*exp(-b*x)
+#     """
+#     if len(Cxx.shape) == 1:
+#         n_sim = 1
+#     else:
+#         n_sim = np.min(Cxx.shape)
+#     if function is None:
+#         def function(x, a, b):
+#             return a * np.exp(-b * x)
     
-    output = np.zeros((Cxx.shape[0], 2))
-    dt = t[1] - t[0]
-    if t_corr != 0:
-        t = t[(t>0)*(t<t_corr)]
+#     output = np.zeros((Cxx.shape[0], 2))
+#     dt = t[1] - t[0]
+#     if t_corr != 0:
+#         t = t[(t>0)*(t<t_corr)]
     
-    if n_sim != 1:
-        for i in np.arange(n_sim):
-            popt, pcov = curve_fit(function, t, Cxx[i,:])
-            output[i,:] = popt
-    else:
-        x = np.arange(0,Cxx.shape[1]*dt, dt)
-        popt, pcov = curve_fit(function, x, Cxx[0,:])
-        output[0,:] = popt
+#     if n_sim != 1:
+#         for i in np.arange(n_sim):
+#             popt, pcov = curve_fit(function, t, Cxx[i,:])
+#             output[i,:] = popt
+#     else:
+#         x = np.arange(0,Cxx.shape[1]*dt, dt)
+#         popt, pcov = curve_fit(function, x, Cxx[0,:])
+#         output[0,:] = popt
         
-    return output
+#     return output
