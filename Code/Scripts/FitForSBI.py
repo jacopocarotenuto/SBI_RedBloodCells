@@ -4,12 +4,21 @@ sys.path.append("./../..")
 from InternalLibrary.StatisticalFunctions import *
 from InternalLibrary.SimulatorPackage import Simulator_noGPU
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import torch
 from tqdm import tqdm
 import _pickle as pickle
 from scipy.optimize import curve_fit
+
+## Parameters
+dt = 1e-6
+Sample_frequency = 25_000 
+DeltaT = 1/Sample_frequency  
+TotalT = 13
+transient = 3
+EffectiveT = TotalT - transient
+sampled_point_amount = np.int64((EffectiveT)/DeltaT) 
+t = np.linspace(0., EffectiveT, sampled_point_amount) 
+
 
 ## Functions
 def stat_fit_corr(single_corr, DeltaT):
