@@ -97,7 +97,7 @@ def ComputeTheoreticalEntropy(theta, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     return sigmas, sigma_mean
 
 
-def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8e4, k_x=6e-3, kbT=4.11):
+def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, dt, mu_x=2.8e4, k_x=6e-3, kbT=4.11):
     '''
     Compute the entropy production for the given traces and parameters
     
@@ -134,20 +134,19 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8
         # Compute the force
         F_x = - k_x * x + k_int * y
         F_y = - k_y * y + k_int * x + f
-        F_xs = (F_x[1:] + F_x[:-1])/ (2*t)
-        F_ys = (F_y[1:] + F_y[:-1])/ (2*t)
+        F_xs = (F_x[1:] + F_x[:-1])/ (2*dt)
+        F_ys = (F_y[1:] + F_y[:-1])/ (2*dt)
         Fx.append(F_xs)
         Fy.append(F_ys)
 
         # Compute the entropy production
-        S_x = sum((x[1:] - x[:-1]) * F_xs)
-        S_y = sum((y[1:] - y[:-1]) * F_ys)
+        S_x = mean((x[1:] - x[:-1]) * F_xs)
+        S_y = mean((y[1:] - y[:-1]) * F_ys)
         S = S_x + S_y
         S_tot.append(S)
     
     S_mean = mean(S_tot)
     return S_mean, array(Fx), array(Fy), array(S_tot)
-
 
 
 
@@ -383,6 +382,58 @@ def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
     return np.array([x_std, *herm, psd_m, psd_std, *mode])
 
 
+def stat_fit_s_redx(single_s_redx, DeltaT, mode="exp"):
+    """
+    Fit the s_redx function
+    """
+    assert mode in ["exp", "simple"], "Mode not recognized"
+
+    t_cxx = np.linspace(0., (len(single_s_redx)+1)*DeltaT, (len(single_s_redx)+1))[1:]
+    
+    def s_redx_simple(t, a, tau):
+        return(1 + a*t/(1+t/tau))
+
+    def s_redx_exp(t, a1, a2, b1, b2, b3, c):
+        a3 = 1 - a1 - a2 
+        sum_exp = a1*np.exp(-b1*t) + (a2)*np.exp(-(b1+b2)*t) + (a3)*np.exp(-(b1+b2+b3)*t)
+        sum = a1*b1 + (a2)*(b1+b2) + (a3)*(b1+b2+b3)
+        tau = 1/sum
+        return(1 + c - (c*tau/t)*(1-sum_exp))
+    
+    if mode == "exp":
+        try: 
+            popt, pcov = curve_fit(s_redx_exp, t_cxx, single_s_redx, p0=[1, 10, 10, 0.1, 0.01, 10],
+                          bounds=([0, 0, 0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf]), maxfev=5000)
+        except:
+            return np.zeros(6)
+        return popt, s_redx_exp(t_cxx, *popt)
+
+    if mode == "simple":
+        try:
+            popt, pcov = curve_fit(s_redx_simple, t_cxx, single_s_redx, p0=[1e3, 1e-2],
+                          bounds=([0, 0], [np.inf, np.inf]), maxfev=5000)
+        except:
+            return np.zeros(6)
+        return popt, s_redx_simple(t_cxx, *popt)
+
+
+def stat_fit_corr(single_corr, DeltaT):
+    """
+    Fit the correlation function with a sum of 3 exponentials
+    """
+    t_cxx = np.linspace(0., (len(single_corr)+1)*DeltaT, (len(single_corr)+1))[1:]
+    
+    def cxx_exp3(t, a1, a2, a3, b1, b2, b3):
+        return a1*np.exp(-b1*t) + a2*np.exp(-b2*t) + a3*np.exp(-b3*t)
+    
+    try: 
+        popt, pcov = curve_fit(cxx_exp3, t_cxx, single_corr, p0=[1e2, 1e2, 1e2, 10, 10, 10], maxfev=5000)
+    except:
+        return np.zeros(6)
+
+    return popt, cxx_exp3(t_cxx, *popt)
+
+
 def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
@@ -398,6 +449,8 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     idx_clean_corr_log = np.logspace(0, np.log10(len(cxx)-1), 20, dtype=np.int32)
     summary_statistics["Cxx_cl_lin"] = cxx[idx_clean_corr]
     summary_statistics["Cxx_cl_log"] = cxx[idx_clean_corr_log]
+
+    summary_statistics["Cxx_fit"] = stat_fit_corr(cxx, DeltaT)[0]
     
     # S red
     S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
@@ -407,6 +460,8 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
 
     summary_statistics["s_redx_cl_lin"] = S_red[idx_clean_corr]
     summary_statistics["s_redx_cl_log"] = S_red[idx_clean_corr_log]
+
+    summary_statistics["s_redx_fit"] = stat_fit_s_redx(S_red, DeltaT, mode="exp")[0]
     
     # Power spectral density
     psdx = stat_psd(single_x_trace, nperseg=1000, Sample_frequency=1/DeltaT)
@@ -531,54 +586,56 @@ def statistics_from_file(max_files_to_analyze=10):
             yield pickle.load(f)
 
 
-def stat_fit_sredx(sredx, t, t_corr, function = None):
-    if function is None:
-        def function(x, a, b, c, d):
-            return 1e4*(a*np.exp(-b*x) + c/x + d)
+# def stat_fit_sredx(sredx, t, t_corr, function = None):
+#     if function is None:
+#         def function(x, a, b, c, d):
+#             return 1e4*(a*np.exp(-b*x) + c/x + d)
         
-    if len(sredx.shape) == 1:
-        n_sim = 1
-    else:
-        n_sim = np.min(sredx.shape)
+#     if len(sredx.shape) == 1:
+#         n_sim = 1
+#     else:
+#         n_sim = np.min(sredx.shape)
         
-    t = t[(t>0)*(t<t_corr)]
-    sredx_fit = np.zeros((n_sim, 4))
-    if n_sim != 1:
-        for i in np.arange(n_sim):
-            popt, _ = curve_fit(function, t, sredx[i], p0 = [1.,1.,1.,1.],maxfev=1000000, bounds=([-10,0,0,0],[10,np.inf,np.inf,np.inf]))
-            sredx_fit[i] = popt
-    else:
-        popt, _ = curve_fit(function, t, sredx, p0 = [1.,1.,1.,1.],maxfev=1000000)
-        sredx_fit[0] = popt
+#     t = t[(t>0)*(t<t_corr)]
+#     sredx_fit = np.zeros((n_sim, 4))
+#     if n_sim != 1:
+#         for i in np.arange(n_sim):
+#             popt, _ = curve_fit(function, t, sredx[i], p0 = [1.,1.,1.,1.],maxfev=1000000, bounds=([-10,0,0,0],[10,np.inf,np.inf,np.inf]))
+#             sredx_fit[i] = popt
+#     else:
+#         popt, _ = curve_fit(function, t, sredx, p0 = [1.,1.,1.,1.],maxfev=1000000)
+#         sredx_fit[0] = popt
         
-    return sredx_fit, t
+#     return sredx_fit, t
 
 
 
-def stat_fit_cxx(Cxx, t, t_corr = 0, function = None):
-    """
-    Fit an exponential function to the autocorrelation functions with formula a*exp(-b*x)
-    """
-    if len(Cxx.shape) == 1:
-        n_sim = 1
-    else:
-        n_sim = np.min(Cxx.shape)
-    if function is None:
-        def function(x, a, b):
-            return a * np.exp(-b * x)
+# def stat_fit_cxx(Cxx, t, t_corr = 0, function = None):
+#     """
+#     Fit an exponential function to the autocorrelation functions with formula a*exp(-b*x)
+#     """
+#     if len(Cxx.shape) == 1:
+#         n_sim = 1
+#     else:
+#         n_sim = np.min(Cxx.shape)
+#     if function is None:
+#         def function(x, a, b):
+#             return a * np.exp(-b * x)
     
-    output = np.zeros((Cxx.shape[0], 2))
-    dt = t[1] - t[0]
-    if t_corr != 0:
-        t = t[(t>0)*(t<t_corr)]
+#     output = np.zeros((Cxx.shape[0], 2))
+#     dt = t[1] - t[0]
+#     if t_corr != 0:
+#         t = t[(t>0)*(t<t_corr)]
     
-    if n_sim != 1:
-        for i in np.arange(n_sim):
-            popt, pcov = curve_fit(function, t, Cxx[i,:])
-            output[i,:] = popt
-    else:
-        x = np.arange(0,Cxx.shape[1]*dt, dt)
-        popt, pcov = curve_fit(function, x, Cxx[0,:])
-        output[0,:] = popt
+#     if n_sim != 1:
+#         for i in np.arange(n_sim):
+#             popt, pcov = curve_fit(function, t, Cxx[i,:])
+#             output[i,:] = popt
+#     else:
+#         x = np.arange(0,Cxx.shape[1]*dt, dt)
+#         popt, pcov = curve_fit(function, x, Cxx[0,:])
+#         output[0,:] = popt
         
-    return output
+#     return output
+
+
