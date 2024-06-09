@@ -486,14 +486,18 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     return summary_statistics
 
 
-def select_summary_statistics(summary_statistics, selected_statistics, z_score=False, cl_lin=-1, cl_log=-1):
+def select_summary_statistics(summary_statistics, selected_statistics, DeltaT,
+                              z_score=False, cl_lin=-1, cl_log=-1, fit_cxx=False, fit_s_redx=False):
     selected_statistics = selected_statistics.copy()
+    
     # Check that the selected statistics are in the summary statistics
     assert set(selected_statistics).issubset(set(summary_statistics.keys()))
     "The selected statistics are not in the summary statistics"
 
+    # Checks on postprocessing
     assert cl_log < 0 or cl_lin < 0, "You cannot subsample bot 'lin' and 'log' at the same time"
-
+    if cl_lin > 0 or cl_log > 0: assert (fit_cxx == False) and (fit_s_redx == False), "You cannot subsample and fit at the same time"
+    
     # Post-subselection of Cxx and s_redx
     if cl_lin > 0:
         idx_clean_corr = np.linspace(0, len(summary_statistics["Cxx"])-1, cl_lin, dtype=np.int32)
@@ -517,6 +521,20 @@ def select_summary_statistics(summary_statistics, selected_statistics, z_score=F
         if "s_red2" in selected_statistics:
             summary_statistics["s_red2"] = summary_statistics["s_red2"][idx_clean_corr]
 
+    # Fit Cxx and s_redx ex post and use the paramaters as summary statistics
+    if fit_cxx and "Cxx" in selected_statistics:
+        summary_statistics["Cxx"] = stat_fit_corr(summary_statistics["Cxx"], DeltaT)[0]
+        if (summary_statistics["Cxx"] == np.zeros(6)).all(): return None
+
+    if fit_s_redx and "s_redx" in selected_statistics:
+        summary_statistics["s_redx"] = stat_fit_s_redx(summary_statistics["s_redx"], DeltaT, mode=fit_s_redx)[0]
+        if (summary_statistics["s_redx"] == np.zeros(6)).all(): return None
+
+    # Check if the fit of Cxx or s_redx failed
+    if ("s_redx_fit" in selected_statistics) and (summary_statistics["s_redx_fit"].all() == 0):
+        return None
+    if ("Cxx_fit" in selected_statistics) and (summary_statistics["Cxx_fit"].all() == 0):
+        return None
 
     # Check if theta is selected for testing reasons
     theta_selected = False
