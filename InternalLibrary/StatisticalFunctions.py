@@ -12,7 +12,8 @@ import os
 import _pickle as pickle
 from scipy.optimize import curve_fit
 from scipy.stats import zscore
-
+import sys; sys.path.append("./../..")
+from InternalLibrary.SimulatorPackage import Simulator_noGPU
 
 def get_theta_from_prior(prior_limits, n_sim):
     '''
@@ -602,6 +603,76 @@ def statistics_from_file(max_files_to_analyze=10):
     for file in statistics_files:
         with open(os.path.join("SummaryStatistics", file), "rb") as f:
             yield pickle.load(f)
+
+
+def get_mode(x):
+    hist, bin_edges = np.histogram(x, bins=int(np.sqrt(len(x))))
+    max_index = np.argmax(hist)
+    mode = (bin_edges[max_index] + bin_edges[max_index+1])/2
+    return mode
+
+def get_credibility_interval(single_sigma_posterior, c_level):
+    pdf = np.sort(single_sigma_posterior)
+    cdf = np.arange(1, len(pdf) + 1) / len(pdf)
+    alpha = (1-c_level)/2
+    region = pdf[(cdf > alpha) & (cdf < 1-alpha)]
+    return region[0], region[-1]
+
+# Compute the mean and mode of the posterior for each parameter
+def get_centroids_from_samples(samples, std=False):
+    mean_params = np.array([])
+    mode_params = np.array([])
+    std_params = np.array([])
+
+    for i in range(5):
+        # Retrive the samples for the parameter i
+        params = samples[:,i].numpy()
+        # Compute the mean
+        mean_params = np.concatenate((mean_params, [np.mean(params)]))
+        # Compute the mode
+        hist, bin_edges = np.histogram(params, bins=int(np.sqrt(params.shape[0])))
+        max_index = np.argmax(hist)
+        mode = (bin_edges[max_index] + bin_edges[max_index+1])/2
+        mode_params = np.concatenate((mode_params, [mode]))
+        # Compute the std
+        if std: std_params = np.concatenate((std_params, [np.std(params)]))
+
+    mean_params = mean_params.reshape(5, 1)
+    mode_params = mode_params.reshape(5, 1)
+    if std: std_params = std_params.reshape(5, 1)
+    
+    if std: return mean_params, mode_params, std_params
+    return mean_params, mode_params
+
+# Compare theoretical entropy with the one computed from the posterior
+def CompareTheoreticalSigma(posterior, n_trials, n_samples, selected_stats, return_theta=False, 
+                            prior_limits={"mu_y":[1e4,140e4],"k_y":[1.5e-2,30e-2],"k_int":[1e-3,6e-3],"tau":[2e-2,20e-2],"eps":[0.5,6],}, 
+                            dt=1e-6, DeltaT=1/25e3, TotalT=13, transient=3,
+                            z_score=False, cl_lin=-1, cl_log=-1, fit_corr=False, fit_s_redx=False):
+    n_trials = int(n_trials)
+    n_samples = int(n_samples)
+
+    # Make n_trials simulations
+    theta_true, theta_torch_true = get_theta_from_prior(prior_limits, n_trials)
+    x_trace_true, y_trace_true, f_trace_true = Simulator_noGPU(dt, DeltaT, TotalT, theta_true, transient_time=transient)
+
+    sigma_true = ComputeTheoreticalEntropy(theta_true)[0]
+    sigma_posterior = np.zeros((n_trials, n_samples))
+
+    # Infer the posterior
+    for i in range(n_trials):
+        print("Making the statistics: i = ", i+1, " / ", n_trials, end="\r")
+        summary_stats_true = compute_summary_statistics(x_trace_true[i], theta_true[:, i])
+        s_true = select_summary_statistics(summary_stats_true, selected_stats, DeltaT, 
+                    z_score=z_score, cl_lin=cl_lin, cl_log=cl_log, fit_cxx=fit_corr, fit_s_redx=fit_s_redx)
+        rescaled_samples = posterior.sample((n_samples,), x=s_true, show_progress_bars=False)
+        samples = rescale_theta_inv(rescaled_samples, prior_limits)
+
+        sigma_samples = ComputeTheoreticalEntropy(samples.numpy().T)[0]
+        sigma_posterior[i, :] = sigma_samples[:, 0]
+
+    if return_theta == False: return sigma_true, sigma_posterior
+    if return_theta == True: return sigma_true, sigma_posterior, theta_true
 
 
 # def stat_fit_sredx(sredx, t, t_corr, function = None):
