@@ -422,13 +422,20 @@ def stat_fit_corr(single_corr, DeltaT):
     """
     Fit the correlation function with a sum of 3 exponentials
     """
-    t_cxx = np.linspace(0., (len(single_corr)+1)*DeltaT, (len(single_corr)+1))[1:]
-    
+    # Get the temporal array
+    n = len(single_corr)
+    t_cxx = np.arange(0., n*DeltaT, DeltaT)[1:]
+
     def cxx_exp3(t, a1, a2, a3, b1, b2, b3):
         return a1*np.exp(-b1*t) + a2*np.exp(-b2*t) + a3*np.exp(-b3*t)
     
+    # Log sample Cxx and t_cxx
+    log_sample = np.logspace(0, np.log10(n-1), 100, dtype=np.int32)
+    t_cxx_log = t_cxx[log_sample]
+    single_corr_log = single_corr[log_sample]
+    
     try: 
-        popt, pcov = curve_fit(cxx_exp3, t_cxx, single_corr, p0=[1e2, 1e2, 1e2, 10, 10, 10], maxfev=5000)
+        popt, pcov = curve_fit(cxx_exp3, t_cxx_log, single_corr_log, p0=[1e2, 1e2, 1e2, 10, 10, 10], maxfev=5000)
     except:
         return np.zeros(6)
 
@@ -462,7 +469,7 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     summary_statistics["s_redx_cl_lin"] = S_red[idx_clean_corr]
     summary_statistics["s_redx_cl_log"] = S_red[idx_clean_corr_log]
 
-    summary_statistics["s_redx_fit"] = stat_fit_s_redx(S_red, DeltaT, mode="exp")[0]
+    summary_statistics["s_redx_fit"] = stat_fit_s_redx(S_red, Cxx, DeltaT, mode="exp")[0]
     
     # Power spectral density
     psdx = stat_psd(single_x_trace, nperseg=1000, Sample_frequency=1/DeltaT)
