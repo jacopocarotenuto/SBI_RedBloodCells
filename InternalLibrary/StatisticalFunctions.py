@@ -265,13 +265,23 @@ def stat_s_redx(Cxx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     S_red: reduced x energy production
     '''
     D_x = kbT * mu_x
-    
+
+
+    # # mode "cut": cut Cxx before computing s_redx
+    # if mode == "cut":
+    #     idx_tau = 4*np.where(Cxx < Cxx[0]/np.e)[0][0]
+    #     Cxx = Cxx[:idx_tau]
+    #     t = t[:idx_tau]
+        
+
     S1 = cumulative_trapezoid(Cxx, x=t, axis=-1, initial=0)
     S1 = cumulative_trapezoid(S1, x=t, axis=-1, initial=0)
     idx_corr = where((t>0)*(t<t_corr))[0]
     S_red1 = (Cxx[0]-Cxx[idx_corr])/(D_x*t[idx_corr]) # First term in S_red
     S_red2 = ((mu_x*k_x)**2)*S1[idx_corr]/(D_x*t[idx_corr]) # Second term in S_red
     S_red = S_red1 + S_red2 # Compute S_red
+
+
 
     return S_red1, S_red2, S_red
 
@@ -389,7 +399,8 @@ def stat_fit_s_redx(single_s_redx, DeltaT, mode="exp"):
     """
     assert mode in ["exp", "simple"], "Mode not recognized"
 
-    t_cxx = np.linspace(0., (len(single_s_redx)+1)*DeltaT, (len(single_s_redx)+1))[1:]
+    n = len(single_s_redx)
+    t_cxx = np.linspace(0., (n+1)*DeltaT, (n+1))[1:]
     
     def s_redx_simple(t, a, tau):
         return(1 + a*t/(1+t/tau))
@@ -402,19 +413,38 @@ def stat_fit_s_redx(single_s_redx, DeltaT, mode="exp"):
         return(1 + c - (c*tau/t)*(1-sum_exp))
     
     if mode == "exp":
+        # # Cut based on the decay of Cxx
+        # # Get the first index for which Cxx < Cxx[0]/2
+        # idx_tau = np.where(single_corr < single_corr[0]/np.e)[0][0]
+        # n_tau = 50
+        # # Cut s_redx and t_cxx
+        # cut = np.min([n-1, n_tau*idx_tau])
+        # t_cxx_fit = t_cxx[:cut]
+        # single_s_redx_fit = single_s_redx[:cut]
+
+        # log subsampling
+        log_sample = np.logspace(0, np.log10(n-1), 100, dtype=np.int32)
+        t_cxx_fit = t_cxx[log_sample]
+        single_s_redx_fit = single_s_redx[log_sample]
+        
+
         try: 
-            popt, pcov = curve_fit(s_redx_exp, t_cxx, single_s_redx, p0=[1, 10, 10, 0.1, 0.01, 10],
+            popt, pcov = curve_fit(s_redx_exp, t_cxx_fit, single_s_redx_fit, p0=[1, 10, 10, 0.1, 0.01, 10],
                           bounds=([0, 0, 0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf]), maxfev=5000)
+            #print(chisquare(single_s_redx_fit, s_redx_exp(t_cxx_fit, *popt)))
         except:
-            return np.zeros(6)
+            return np.zeros(6), np.zeros(len(t_cxx))
         return popt, s_redx_exp(t_cxx, *popt)
 
+
     if mode == "simple":
+        t_cxx_fit = t_cxx[::6]
+        single_s_redx_fit = single_s_redx[::6]
         try:
-            popt, pcov = curve_fit(s_redx_simple, t_cxx, single_s_redx, p0=[1e3, 1e-2],
+            popt, pcov = curve_fit(s_redx_simple, t_cxx_fit, single_s_redx_fit, p0=[1e3, 1e-2],
                           bounds=([0, 0], [np.inf, np.inf]), maxfev=5000)
         except:
-            return np.zeros(6)
+            return np.zeros(6), np.zeros(len(t_cxx))
         return popt, s_redx_simple(t_cxx, *popt)
 
 
@@ -424,8 +454,8 @@ def stat_fit_corr(single_corr, DeltaT):
     """
     # Get the temporal array
     n = len(single_corr)
-    t_cxx = np.arange(0., n*DeltaT, DeltaT)[1:]
-
+    t_cxx = np.linspace(0., (n+1)*DeltaT, (n+1))[1:]
+    
     def cxx_exp3(t, a1, a2, a3, b1, b2, b3):
         return a1*np.exp(-b1*t) + a2*np.exp(-b2*t) + a3*np.exp(-b3*t)
     
@@ -434,8 +464,8 @@ def stat_fit_corr(single_corr, DeltaT):
     t_cxx_log = t_cxx[log_sample]
     single_corr_log = single_corr[log_sample]
     
-    try: 
-        popt, pcov = curve_fit(cxx_exp3, t_cxx_log, single_corr_log, p0=[1e2, 1e2, 1e2, 10, 10, 10], maxfev=5000)
+    try:
+        popt, pcov = curve_fit(cxx_exp3, t_cxx_log, single_corr_log, p0=[50, 100, 10, 100, 100, 100], maxfev=10000) 
     except:
         return np.zeros(6)
 
@@ -458,7 +488,8 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     summary_statistics["Cxx_cl_lin"] = cxx[idx_clean_corr]
     summary_statistics["Cxx_cl_log"] = cxx[idx_clean_corr_log]
 
-    summary_statistics["Cxx_fit"] = stat_fit_corr(cxx, DeltaT)[0]
+    popt_cxx, fit_cxx = stat_fit_corr(cxx, DeltaT)
+    summary_statistics["Cxx_fit"] = popt_cxx  # Parameters of the fit
     
     # S red
     S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
@@ -469,7 +500,8 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     summary_statistics["s_redx_cl_lin"] = S_red[idx_clean_corr]
     summary_statistics["s_redx_cl_log"] = S_red[idx_clean_corr_log]
 
-    summary_statistics["s_redx_fit"] = stat_fit_s_redx(S_red, Cxx, DeltaT, mode="exp")[0]
+    S_red1_from_fit, S_red2_from_fit, S_red_from_fit = stat_s_redx(fit_cxx, t_corr, t[idx_corr])
+    summary_statistics["s_redx_fit"] = stat_fit_s_redx(S_red_from_fit, DeltaT, mode="exp")[0] # Parameters of the fit
     
     # Power spectral density
     psdx = stat_psd(single_x_trace, nperseg=1000, Sample_frequency=1/DeltaT)
