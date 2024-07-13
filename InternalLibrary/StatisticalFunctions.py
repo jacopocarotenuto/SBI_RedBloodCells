@@ -465,9 +465,9 @@ def stat_fit_corr(single_corr, DeltaT):
     single_corr_log = single_corr[log_sample]
     
     try:
-        popt, pcov = curve_fit(cxx_exp3, t_cxx_log, single_corr_log, p0=[50, 100, 10, 100, 100, 100], maxfev=10000) 
+        popt, pcov = curve_fit(cxx_exp3, t_cxx_log, single_corr_log, p0=[50, 100, 10, 100, 100, 100], maxfev=20000) 
     except:
-        return np.zeros(6)
+        return np.zeros(6), np.zeros(len(t_cxx))
 
     return popt, cxx_exp3(t_cxx, *popt)
 
