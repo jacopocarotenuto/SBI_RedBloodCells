@@ -365,15 +365,7 @@ def stat_hermite(x):
     '''
     s = np.array([])
     for i in range(0,13,2):
-<<<<<<< HEAD
-        for j in range(i+2,13,2):
-            index = zeros
-            index[j] = 1
-            s = np.concatenate((s, [hermite(x, index.tolist())]))
-        zeros[i] = 1
-=======
         s = np.concatenate((s, [hermite(x, i)]))
->>>>>>> 656d769853ab6b4c661d97986300f6c19f402298
     return s
 
 def stat_mode(cxx, dt, mean_psd):
