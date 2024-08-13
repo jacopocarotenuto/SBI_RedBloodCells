@@ -8,9 +8,49 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.signal import welch
 import numpy as np
 import torch
+import os
+import _pickle as pickle
+from scipy.optimize import curve_fit
+from scipy.stats import zscore
+
+
+def get_theta_from_prior(prior_limits, n_sim):
+    '''
+    Get parameters drawn from the prior.
+
+    INPUT
+    prior_limits: prior limits
+    n_sim: number of simulated trajectories
+
+    OUTPUT
+    theta: parameters drawn from the prior
+    theta_torch: parameters drawn from the prior in torch format
+    '''
+
+    # Get parameters drawn from the prior
+    theta = [np.random.uniform(prior_limits[i][0], prior_limits[i][1], size=(n_sim, 1)) for i in prior_limits]
+    theta_numpy = np.array(theta)
+    theta_torch = torch.from_numpy(theta_numpy[:, :, 0]).to(torch.float32)
+
+    return theta_numpy, theta_torch
+
+
+def get_prior_limit_list(prior_limits):
+    prior_limits_list = [[prior_limits[i][0], prior_limits[i][1]] for i in prior_limits]
+    return prior_limits_list
+
+
+def get_prior_box(prior_limits):
+    prior_limits_list = get_prior_limit_list(prior_limits)
+    prior_limits_array = array(prior_limits_list)
+    prior_box = utils.torchutils.BoxUniform(low=torch.tensor(prior_limits_array[:, 0]), high=torch.tensor(prior_limits_array[:, 1]))
+    return prior_box
+
+
+
 
 @jit(nopython=True)
-def ComputeTheoreticalEntropy(theta):
+def ComputeTheoreticalEntropy(theta, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Compute the entropy production for the given parameters.
 
@@ -21,24 +61,23 @@ def ComputeTheoreticalEntropy(theta):
     sigmas: entropy production for each simulation
     sigma_mean: mean entropy production
     '''
+    D_x = kbT * mu_x
     
-    if len(theta) != 9:
-        raise ValueError('There must be 9 parameters in theta')
+    if len(theta) != 5:
+        raise ValueError('There must be 5 parameters in theta')
 
     if len(set([x.shape for x in theta])) != 1:
         raise Exception("Parameters dimension are not all equal.")
     
-    n_sim = theta[0].shape[0]
+    n_sim = theta.shape[1]
     sigmas = np.zeros((n_sim,1), dtype = np.float64)
     
     for i in range(n_sim):
-        mu_x = theta[0][i]
-        mu_y = theta[1][i]
-        k_x = theta[2][i]
-        k_y = theta[3][i]
-        k_int = theta[4][i]
-        tau = theta[5][i]
-        eps = theta[7][i]
+        mu_y = theta[0, i]
+        k_y = theta[1, i]
+        k_int = theta[2, i]
+        tau = theta[3, i]
+        eps = theta[4, i]
 
         sigma = (mu_y * eps**2) / ((1 + k_y * mu_y * tau) - ((k_int ** 2 * mu_x * mu_y * tau ** 2) / (1 + k_x * mu_x * tau)))
         sigmas[i] = sigma
@@ -48,7 +87,7 @@ def ComputeTheoreticalEntropy(theta):
     return sigmas, sigma_mean
 
 
-def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim):
+def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Compute the entropy production for the given traces and parameters
     
@@ -69,17 +108,16 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim):
     Fy = []
     S_tot = []
 
+    D_x = kbT * mu_x
     for i in range (n_sim):
         # Unpack Parameters
-        mu_x = theta[0][i]
-        mu_y = theta[1][i]
-        k_x = theta[2][i]
-        k_y = theta[3][i]
-        k_int = theta[4][i]
-        tau = theta[5][i]
-        eps = theta[6][i]
-        D_x = theta[7][i]
-        D_y = theta[8][i]  
+        mu_y = theta[0, i]
+        k_y = theta[1, i]
+        k_int = theta[2, i]
+        tau = theta[3, i]
+        eps = theta[4, i]
+
+        D_y = kbT * mu_y
 
         x, y, f = x_trace[i], y_trace[i], f_trace[i]
 
@@ -90,8 +128,8 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim):
         Fy.append(F_y)
 
         # Compute the entropy production
-        S_x = sum((x_trace[i][1:] - x_trace[i][:-1]) * F_x[:-1] / D_x)
-        S_y = sum((f_trace[i][1:] - f_trace[i][:-1]) * F_y[:-1] / D_y)
+        S_x = sum((x_trace[i][1:] - x_trace[i][:-1]) * F_x[:-1] / t)
+        S_y = sum((f_trace[i][1:] - f_trace[i][:-1]) * F_y[:-1] / t)
         S = S_x + S_y
         S_tot.append(S)
     
@@ -143,11 +181,13 @@ def corr(x,y,nmax,dt=False):
 
 
 
-def hermite(x, index):
+def hermite(x, i):
     std_x = np.std(x)
     z = x/std_x
-    i = len(index)-1
-    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(x, index)*(2**i*
+    zeros = np.zeros(13)
+    index = zeros
+    index[i] = 1
+    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index.to_list())*(2**i*
             np.math.factorial(i)*np.sqrt(np.pi))**-0.5) /np.sqrt(std_x)))
 
 def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
@@ -197,7 +237,7 @@ def stat_corr_single(single_x_trace, DeltaT, t, t_corr):
     return Cxx
 
 
-def stat_s_redx(Cxx, t_corr, t, theta_i=[1 for i in range(9)], alpha=1e4):
+def stat_s_redx(Cxx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Computes the reduced energy production for a single x trace signal.
 
@@ -210,18 +250,18 @@ def stat_s_redx(Cxx, t_corr, t, theta_i=[1 for i in range(9)], alpha=1e4):
     OUTPUT
     S_red: reduced x energy production
     '''
-    mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
+    D_x = kbT * mu_x
+    
     S1 = cumulative_trapezoid(Cxx, x=t, axis=-1, initial=0)
     S1 = cumulative_trapezoid(S1, x=t, axis=-1, initial=0)
     idx_corr = where((t>0)*(t<t_corr))[0]
     S_red1 = (Cxx[0]-Cxx[idx_corr])/(D_x*t[idx_corr]) # First term in S_red
-    #S_red2 = ((mu_x*k_x)**2)*S1[idx_corr]/(D_x*t[idx_corr]) # Second term in S_red
-    S_red2 = alpha*S1[idx_corr]/(D_x*t[idx_corr])
+    S_red2 = ((mu_x*k_x)**2)*S1[idx_corr]/(D_x*t[idx_corr]) # Second term in S_red
     S_red = S_red1 + S_red2 # Compute S_red
 
     return S_red1, S_red2, S_red
 
-def stat_s_redf(Cfx, t_corr, t, theta_i):
+def stat_s_redf(Cfx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
     Computes the reduced energy production for a xf trace signal.
 
@@ -234,7 +274,8 @@ def stat_s_redf(Cfx, t_corr, t, theta_i):
     OUTPUT
     S_red: reduced f energy production
     '''
-    mu_x, k_x, D_x = theta_i[0], theta_i[2], theta_i[7]
+    D_x = kbT * mu_x
+
     idx_corr = where((t>0)*(t<t_corr))[0]
     S2f = cumulative_trapezoid(Cfx - Cfx[0], x=t, axis=-1, initial=0)
     S3f = cumulative_trapezoid(Cfx, x=t, axis=-1, initial=0)
@@ -258,6 +299,11 @@ def stat_psd(single_trace, nperseg, Sample_frequency):
     '''
     frequencies, psd = welch(single_trace, fs=Sample_frequency, nperseg=nperseg)
     return psd
+
+def stat_psd_mean(single_trace, nperseg, Sample_frequency):
+    _ , psd = welch(single_trace, fs=Sample_frequency, nperseg=nperseg)
+    return np.array([mean(psd), np.std(psd)])
+
 
 def stat_timeseries(single_timeseries):
     '''
@@ -288,17 +334,44 @@ def stat_hermite(x):
     s: Hermite statistics
     '''
     s = np.array([])
-    zeros = np.zeros(13)
     for i in range(0,13,2):
+<<<<<<< HEAD
         for j in range(i+2,13,2):
             index = zeros
             index[j] = 1
             s = np.concatenate((s, [hermite(x, index.tolist())]))
         zeros[i] = 1
+=======
+        s = np.concatenate((s, [hermite(x, i)]))
+>>>>>>> 656d769853ab6b4c661d97986300f6c19f402298
     return s
 
+def stat_mode(cxx, dt, mean_psd):
+    def f(t, a0, a2, a4, a6, a8, a10, a12, a14, a16, a18, a20):
+        t = t*mean_psd
+        h = hermite
+        return np.sqrt(mean_psd)*(a0*h(t, 0) + a2*h(t, 2) + a4*h(t, 4) + a6*h(t, 6) + a8*h(t, 8) + a10*h(t, 10) + a12*h(t, 12)+
+                                    a14*h(t, 12) + a16*h(t, 16) + a18*h(t, 18) + a20*h(t, 20))
+    tp = np.linspace(0, dt*cxx.shape[0], cxx.shape[0])
+    popt, _ = curve_fit(f, tp, cxx)
+    return np.array(popt)
 
-def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
+def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
+    x = single_x_trace
+    x_std = np.std(x)
+
+    herm = stat_hermite(x)
+
+    psd = stat_psd(x, nperseg, Sample_frequency)
+    psd_m = mean(psd)
+    psd_std = np.std(psd)
+
+    mode = stat_mode(cxx, dt, mean_psd)
+
+    return np.array([x_std, *herm, psd_m, psd_std, *mode])
+
+
+def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
     t_corr = TotalT/50 # Hyperparameter
@@ -306,7 +379,8 @@ def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
     # Autocorrelation
     Cxx = stat_corr_single(single_x_trace, DeltaT, t, t_corr)
     idx_corr = where((t>0)*(t<t_corr))[0]
-    summary_statistics["Cxx"] = Cxx[idx_corr]
+    Cxx = Cxx[idx_corr]
+    summary_statistics["Cxx"] = Cxx
     
     # S red
     S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
@@ -325,16 +399,59 @@ def compute_summary_statistics(single_x_trace, DeltaT = 1/25e3, TotalT = 10):
     # Hermite coefficients
     summary_statistics["hermite"] = stat_hermite(single_x_trace)
 
+    # Cxx decomposition in Hermite Coefficients
+    summary_statistics["modes"] = stat_mode(Cxx, 1e-6, mean(psdx))
+
+    # Tucci's summary statistics
+    summary_statistics["tucci"] = stat_Tucci(single_x_trace, 1000, 1/DeltaT, Cxx, 1e-6, mean(psdx))
+ 
+    # Parameters
+    summary_statistics["theta"] = single_theta
+
     return summary_statistics
 
 
-def select_summary_statistics(summary_statistics, selected_statistics):
+def select_summary_statistics(summary_statistics, selected_statistics, z_score=False):
     assert set(selected_statistics).issubset(set(summary_statistics.keys()))
     "The selected statistics are not in the summary statistics"
 
+    theta_selected = False
+    if "theta" in selected_statistics:
+        theta_selected = True
+        selected_statistics.remove("theta")
+
     # Get the selected summary statistics in a torch tensor
-    list_of_statistics = [torch.tensor(summary_statistics[i]) for i in selected_statistics]
+    if z_score:
+        list_of_statistics = [torch.tensor(zscore(summary_statistics[i])) for i in selected_statistics]
+    else:   
+        list_of_statistics = [torch.tensor(summary_statistics[i]) for i in selected_statistics]
     #print([i.size() for i in list_of_statistics])
     selected_summary_statistics = torch.cat(list_of_statistics, dim=0)
     selected_summary_statistics = torch.unsqueeze(selected_summary_statistics, 0)
+
+    if theta_selected:
+        theta = torch.tensor(summary_statistics["theta"])
+        selected_summary_statistics = torch.cat((selected_summary_statistics, theta.T), dim=1)
+
+    selected_summary_statistics = selected_summary_statistics.to(torch.float32)
     return selected_summary_statistics
+
+def statistics_from_file(max_files_to_analyze=10):
+    folders_inside_statistics = os.listdir("SummaryStatistics")
+    folders_inside_statistics.remove("done.txt")
+    if ".DS_Store" in folders_inside_statistics:
+        folders_inside_statistics.remove(".DS_Store")
+    statistics_files = []
+    for folder in folders_inside_statistics:
+        temp = os.listdir(os.path.join("SummaryStatistics", folder))
+        if ".DS_Store" in temp:
+            temp.remove(".DS_Store")
+        temp = [os.path.join(folder, f) for f in temp]
+        statistics_files.extend(temp)
+    if len(statistics_files) > max_files_to_analyze:
+        statistics_files = statistics_files[:max_files_to_analyze]
+
+    for file in statistics_files:
+        with open(os.path.join("SummaryStatistics", file), "rb") as f:
+            yield pickle.load(f)
+
