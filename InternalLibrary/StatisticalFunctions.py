@@ -12,7 +12,8 @@ import os
 import _pickle as pickle
 from scipy.optimize import curve_fit
 from scipy.stats import zscore
-
+import sys; sys.path.append("./../..")
+from InternalLibrary.SimulatorPackage import Simulator_noGPU
 
 def get_theta_from_prior(prior_limits, n_sim):
     '''
@@ -30,8 +31,18 @@ def get_theta_from_prior(prior_limits, n_sim):
     # Get parameters drawn from the prior
     theta = [np.random.uniform(prior_limits[i][0], prior_limits[i][1], size=(n_sim, 1)) for i in prior_limits]
     theta_numpy = np.array(theta)
-    theta_torch = torch.from_numpy(theta_numpy[:, :, 0]).to(torch.float32)
+    
+    theta_numpy = theta_numpy[:,theta[1] * 0.006 > theta[2]**2]
+    theta_numpy = theta_numpy.reshape(5, theta_numpy.shape[1],1)
 
+    miss = n_sim - theta_numpy.shape[1]
+    if miss > 0:
+        replacement = get_theta_from_prior(prior_limits, miss)
+        theta_numpy = np.concatenate((theta_numpy, replacement), axis=1)
+        theta_torch = torch.from_numpy(theta_numpy[:, :, 0]).to(torch.float32)
+    else:
+        theta_torch = torch.from_numpy(theta_numpy[:, :, 0]).to(torch.float32)
+    
     return theta_numpy, theta_torch
 
 
@@ -87,7 +98,7 @@ def ComputeTheoreticalEntropy(theta, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     return sigmas, sigma_mean
 
 
-def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
+def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, dt, mu_x=2.8e4, k_x=6e-3, kbT=4.11):
     '''
     Compute the entropy production for the given traces and parameters
     
@@ -124,17 +135,20 @@ def ComputeEmpiricalEntropy(x_trace, y_trace, f_trace, theta, n_sim, t, mu_x=2.8
         # Compute the force
         F_x = - k_x * x + k_int * y
         F_y = - k_y * y + k_int * x + f
-        Fx.append(F_x)
-        Fy.append(F_y)
+        F_xs = (F_x[1:] + F_x[:-1])/ (2*dt)
+        F_ys = (F_y[1:] + F_y[:-1])/ (2*dt)
+        Fx.append(F_xs)
+        Fy.append(F_ys)
 
         # Compute the entropy production
-        S_x = sum((x_trace[i][1:] - x_trace[i][:-1]) * F_x[:-1] / t)
-        S_y = sum((f_trace[i][1:] - f_trace[i][:-1]) * F_y[:-1] / t)
+        S_x = mean((x[1:] - x[:-1]) * F_xs)
+        S_y = mean((y[1:] - y[:-1]) * F_ys)
         S = S_x + S_y
         S_tot.append(S)
     
     S_mean = mean(S_tot)
     return S_mean, array(Fx), array(Fy), array(S_tot)
+
 
 
 
@@ -180,15 +194,15 @@ def corr(x,y,nmax,dt=False):
     return corr[:nmax]
 
 
-
 def hermite(x, i):
     std_x = np.std(x)
     z = x/std_x
-    zeros = np.zeros(13)
+    zeros = np.zeros(30)
     index = zeros
     index[i] = 1
-    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index.to_list())*(2**i*
+    return np.mean(((np.exp(-z**2/2)*np.polynomial.hermite.hermval(z, index.tolist())*(2**i*
             np.math.factorial(i)*np.sqrt(np.pi))**-0.5) /np.sqrt(std_x)))
+
 
 def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
     '''
@@ -216,22 +230,22 @@ def stat_corr(single_x_trace, single_f_trace, DeltaT, t, t_corr):
     return Cxx, Cfx, Cff
 
 
-def stat_corr_single(single_x_trace, DeltaT, t, t_corr):
+def stat_corr_single(single_x_trace, DeltaT):
     '''
     Computes the autocorrelation for a single x trace signal.
 
     INPUT
     singles_x_trace: single x trace signal
     DeltaT: sampling time
-    t: time array
-    t_corr: maximum time for the correlation
+    ((t: time array
+    t_corr: maximum time for the correlation))
 
     OUTPUT
     Cxx: autocorrelation x signal
     '''
 
     sampled_point_amount = single_x_trace.shape[0]
-    idx_corr = where((t>0)*(t<t_corr))[0]
+    #idx_corr = where((t>0)*(t<t_corr))[0]
     Cxx= corr(single_x_trace, single_x_trace, sampled_point_amount, dt=DeltaT) # compute the autocorrellation for each x trace
 
     return Cxx
@@ -251,7 +265,15 @@ def stat_s_redx(Cxx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     S_red: reduced x energy production
     '''
     D_x = kbT * mu_x
-    
+
+
+    # # mode "cut": cut Cxx before computing s_redx
+    # if mode == "cut":
+    #     idx_tau = 4*np.where(Cxx < Cxx[0]/np.e)[0][0]
+    #     Cxx = Cxx[:idx_tau]
+    #     t = t[:idx_tau]
+        
+
     S1 = cumulative_trapezoid(Cxx, x=t, axis=-1, initial=0)
     S1 = cumulative_trapezoid(S1, x=t, axis=-1, initial=0)
     idx_corr = where((t>0)*(t<t_corr))[0]
@@ -259,7 +281,10 @@ def stat_s_redx(Cxx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     S_red2 = ((mu_x*k_x)**2)*S1[idx_corr]/(D_x*t[idx_corr]) # Second term in S_red
     S_red = S_red1 + S_red2 # Compute S_red
 
+
+
     return S_red1, S_red2, S_red
+
 
 def stat_s_redf(Cfx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     '''
@@ -284,6 +309,7 @@ def stat_s_redf(Cfx, t_corr, t, mu_x=2.8e4, k_x=6e-3, kbT=3.8):
     
     return S_redf
   
+
 def stat_psd(single_trace, nperseg, Sample_frequency):
     '''
     Computes the power spectral density for a single trace signal.
@@ -300,6 +326,7 @@ def stat_psd(single_trace, nperseg, Sample_frequency):
     frequencies, psd = welch(single_trace, fs=Sample_frequency, nperseg=nperseg)
     return psd
 
+
 def stat_psd_mean(single_trace, nperseg, Sample_frequency):
     _ , psd = welch(single_trace, fs=Sample_frequency, nperseg=nperseg)
     return np.array([mean(psd), np.std(psd)])
@@ -315,12 +342,15 @@ def stat_timeseries(single_timeseries):
     OUTPUT
     s: summary statistics
     '''
-    statistics_functions = [mean, var, median, max, min]
-    s = zeros((len(statistics_functions)))
+    statistics_functions = [[mean, var, median, max, min], 
+                            [lambda x: hermite(x, i) for i in range(1, 6)]]
+    # s = zeros((len(statistics_functions)))
 
-    for j, func in enumerate(statistics_functions):
-        s[j] = func(single_timeseries)
+    # for j, func in enumerate(statistics_functions):
+    #     s[j] = func(single_timeseries)
 
+    results = [func(single_timeseries) for l in statistics_functions for func in l]
+    s = np.concatenate([results])
     return s
 
 def stat_hermite(x):
@@ -354,7 +384,7 @@ def stat_mode(cxx, dt, mean_psd):
                                     a14*h(t, 12) + a16*h(t, 16) + a18*h(t, 18) + a20*h(t, 20))
     tp = np.linspace(0, dt*cxx.shape[0], cxx.shape[0])
     popt, _ = curve_fit(f, tp, cxx)
-    return np.array(popt)
+    return popt
 
 def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
     x = single_x_trace
@@ -371,22 +401,115 @@ def stat_Tucci(single_x_trace, nperseg, Sample_frequency, cxx, dt, mean_psd):
     return np.array([x_std, *herm, psd_m, psd_std, *mode])
 
 
+def stat_fit_s_redx(single_s_redx, DeltaT, mode="exp"):
+    """
+    Fit the s_redx function
+    """
+    assert mode in ["exp", "simple"], "Mode not recognized"
+
+    n = len(single_s_redx)
+    t_cxx = np.linspace(0., (n+1)*DeltaT, (n+1))[1:]
+    
+    def s_redx_simple(t, a, tau):
+        return(1 + a*t/(1+t/tau))
+
+    def s_redx_exp(t, a1, a2, b1, b2, b3, c):
+        a3 = 1 - a1 - a2 
+        sum_exp = a1*np.exp(-b1*t) + (a2)*np.exp(-(b1+b2)*t) + (a3)*np.exp(-(b1+b2+b3)*t)
+        sum = a1*b1 + (a2)*(b1+b2) + (a3)*(b1+b2+b3)
+        tau = 1/sum
+        return(1 + c - (c*tau/t)*(1-sum_exp))
+    
+    if mode == "exp":
+        # # Cut based on the decay of Cxx
+        # # Get the first index for which Cxx < Cxx[0]/2
+        # idx_tau = np.where(single_corr < single_corr[0]/np.e)[0][0]
+        # n_tau = 50
+        # # Cut s_redx and t_cxx
+        # cut = np.min([n-1, n_tau*idx_tau])
+        # t_cxx_fit = t_cxx[:cut]
+        # single_s_redx_fit = single_s_redx[:cut]
+
+        # log subsampling
+        log_sample = np.logspace(0, np.log10(n-1), 100, dtype=np.int32)
+        t_cxx_fit = t_cxx[log_sample]
+        single_s_redx_fit = single_s_redx[log_sample]
+        
+
+        try: 
+            popt, pcov = curve_fit(s_redx_exp, t_cxx_fit, single_s_redx_fit, p0=[1, 10, 10, 0.1, 0.01, 10],
+                          bounds=([0, 0, 0, 0, 0, 0], [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf]), maxfev=5000)
+            #print(chisquare(single_s_redx_fit, s_redx_exp(t_cxx_fit, *popt)))
+        except:
+            return np.zeros(6), np.zeros(len(t_cxx))
+        return popt, s_redx_exp(t_cxx, *popt)
+
+
+    if mode == "simple":
+        t_cxx_fit = t_cxx[::6]
+        single_s_redx_fit = single_s_redx[::6]
+        try:
+            popt, pcov = curve_fit(s_redx_simple, t_cxx_fit, single_s_redx_fit, p0=[1e3, 1e-2],
+                          bounds=([0, 0], [np.inf, np.inf]), maxfev=5000)
+        except:
+            return np.zeros(6), np.zeros(len(t_cxx))
+        return popt, s_redx_simple(t_cxx, *popt)
+
+
+def stat_fit_corr(single_corr, DeltaT):
+    """
+    Fit the correlation function with a sum of 3 exponentials
+    """
+    # Get the temporal array
+    n = len(single_corr)
+    t_cxx = np.linspace(0., (n+1)*DeltaT, (n+1))[1:]
+    
+    def cxx_exp3(t, a1, a2, a3, b1, b2, b3):
+        return a1*np.exp(-b1*t) + a2*np.exp(-b2*t) + a3*np.exp(-b3*t)
+    
+    # Log sample Cxx and t_cxx
+    log_sample = np.logspace(0, np.log10(n-1), 100, dtype=np.int32)
+    t_cxx_log = t_cxx[log_sample]
+    single_corr_log = single_corr[log_sample]
+    
+    try:
+        popt, pcov = curve_fit(cxx_exp3, t_cxx_log, single_corr_log, p0=[50, 100, 10, 100, 100, 100], maxfev=20000) 
+    except:
+        return np.zeros(6), np.zeros(len(t_cxx))
+
+    return popt, cxx_exp3(t_cxx, *popt)
+
+
 def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
-    t_corr = TotalT/50 # Hyperparameter
+    t_corr = TotalT/20 # Hyperparameter
     
     # Autocorrelation
-    Cxx = stat_corr_single(single_x_trace, DeltaT, t, t_corr)
+    Cxx = stat_corr_single(single_x_trace, DeltaT)
     idx_corr = where((t>0)*(t<t_corr))[0]
-    Cxx = Cxx[idx_corr]
-    summary_statistics["Cxx"] = Cxx
+    cxx = Cxx[idx_corr]
+    summary_statistics["Cxx"] = cxx  
+
+    idx_clean_corr = np.linspace(0, len(cxx)-1, 500, dtype=np.int32)
+    idx_clean_corr_log = np.logspace(0, np.log10(len(cxx)-1), 20, dtype=np.int32)
+    summary_statistics["Cxx_cl_lin"] = cxx[idx_clean_corr]
+    summary_statistics["Cxx_cl_log"] = cxx[idx_clean_corr_log]
+
+    popt_cxx, fit_cxx = stat_fit_corr(cxx, DeltaT)
+    summary_statistics["Cxx_fit"] = popt_cxx  # Parameters of the fit
     
     # S red
     S_red1, S_red2, S_red = stat_s_redx(Cxx, t_corr, t)
     summary_statistics["s_red1"] = S_red1
     summary_statistics["s_red2"] = S_red2
     summary_statistics["s_redx"] = S_red 
+
+    summary_statistics["s_redx_cl_lin"] = S_red[idx_clean_corr]
+    summary_statistics["s_redx_cl_log"] = S_red[idx_clean_corr_log]
+
+    S_red1_from_fit, S_red2_from_fit, S_red_from_fit = stat_s_redx(fit_cxx, t_corr, t[idx_corr])
+    summary_statistics["s_redx_fit"] = stat_fit_s_redx(S_red_from_fit, DeltaT, mode="exp")[0] # Parameters of the fit
     
     # Power spectral density
     psdx = stat_psd(single_x_trace, nperseg=1000, Sample_frequency=1/DeltaT)
@@ -403,7 +526,7 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     summary_statistics["modes"] = stat_mode(Cxx, 1e-6, mean(psdx))
 
     # Tucci's summary statistics
-    summary_statistics["tucci"] = stat_Tucci(single_x_trace, 1000, 1/DeltaT, Cxx, 1e-6, mean(psdx))
+    summary_statistics["tucci"] = stat_Tucci(single_x_trace, 1000, 1/DeltaT, cxx, 1e-6, mean(psdx))
  
     # Parameters
     summary_statistics["theta"] = single_theta
@@ -411,10 +534,57 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
     return summary_statistics
 
 
-def select_summary_statistics(summary_statistics, selected_statistics, z_score=False):
+def select_summary_statistics(summary_statistics, selected_statistics, DeltaT,
+                              z_score=False, cl_lin=-1, cl_log=-1, fit_cxx=False, fit_s_redx=False):
+    selected_statistics = selected_statistics.copy()
+    
+    # Check that the selected statistics are in the summary statistics
     assert set(selected_statistics).issubset(set(summary_statistics.keys()))
     "The selected statistics are not in the summary statistics"
 
+    # Checks on postprocessing
+    assert cl_log < 0 or cl_lin < 0, "You cannot subsample bot 'lin' and 'log' at the same time"
+    if cl_lin > 0 or cl_log > 0: assert (fit_cxx == False) and (fit_s_redx == False), "You cannot subsample and fit at the same time"
+    
+    # Post-subselection of Cxx and s_redx
+    if cl_lin > 0:
+        idx_clean_corr = np.linspace(0, len(summary_statistics["Cxx"])-1, cl_lin, dtype=np.int32)
+        if "Cxx" in selected_statistics:
+            summary_statistics["Cxx"] = summary_statistics["Cxx"][idx_clean_corr]
+        if "s_redx" in selected_statistics:
+            summary_statistics["s_redx"] = summary_statistics["s_redx"][idx_clean_corr]
+        if "s_red1" in selected_statistics:
+            summary_statistics["s_red1"] = summary_statistics["s_red1"][idx_clean_corr]
+        if "s_red2" in selected_statistics:
+            summary_statistics["s_red2"] = summary_statistics["s_red2"][idx_clean_corr]
+
+    if cl_log > 0:
+        idx_clean_corr = np.logspace(0, np.log10(len(summary_statistics["Cxx"])-1), cl_log, dtype=np.int32)
+        if "Cxx" in selected_statistics:
+            summary_statistics["Cxx"] = summary_statistics["Cxx"][idx_clean_corr]
+        if "s_redx" in selected_statistics:
+            summary_statistics["s_redx"] = summary_statistics["s_redx"][idx_clean_corr]
+        if "s_red1" in selected_statistics:
+            summary_statistics["s_red1"] = summary_statistics["s_red1"][idx_clean_corr]
+        if "s_red2" in selected_statistics:
+            summary_statistics["s_red2"] = summary_statistics["s_red2"][idx_clean_corr]
+
+    # Fit Cxx and s_redx ex post and use the paramaters as summary statistics
+    if fit_cxx and "Cxx" in selected_statistics:
+        summary_statistics["Cxx"] = stat_fit_corr(summary_statistics["Cxx"], DeltaT)[0]
+        if (summary_statistics["Cxx"] == np.zeros(6)).all(): return None
+
+    if fit_s_redx and "s_redx" in selected_statistics:
+        summary_statistics["s_redx"] = stat_fit_s_redx(summary_statistics["s_redx"], DeltaT, mode=fit_s_redx)[0]
+        if (summary_statistics["s_redx"] == np.zeros(6)).all(): return None
+
+    # Check if the fit of Cxx or s_redx failed
+    if ("s_redx_fit" in selected_statistics) and (summary_statistics["s_redx_fit"].all() == 0):
+        return None
+    if ("Cxx_fit" in selected_statistics) and (summary_statistics["Cxx_fit"].all() == 0):
+        return None
+
+    # Check if theta is selected for testing reasons
     theta_selected = False
     if "theta" in selected_statistics:
         theta_selected = True
@@ -425,16 +595,42 @@ def select_summary_statistics(summary_statistics, selected_statistics, z_score=F
         list_of_statistics = [torch.tensor(zscore(summary_statistics[i])) for i in selected_statistics]
     else:   
         list_of_statistics = [torch.tensor(summary_statistics[i]) for i in selected_statistics]
-    #print([i.size() for i in list_of_statistics])
     selected_summary_statistics = torch.cat(list_of_statistics, dim=0)
     selected_summary_statistics = torch.unsqueeze(selected_summary_statistics, 0)
 
+    # Add theta to the summary statistics if selected
     if theta_selected:
         theta = torch.tensor(summary_statistics["theta"])
         selected_summary_statistics = torch.cat((selected_summary_statistics, theta.T), dim=1)
 
+    # Convert the summary statistics to float32 (required for sbi)
     selected_summary_statistics = selected_summary_statistics.to(torch.float32)
     return selected_summary_statistics
+
+
+# Helper function to rescale the parameters
+## Please, note that you need also to change the prior limits in the model
+def rescale_theta(theta_torch, prior_limits):
+    theta_torch2 = theta_torch.clone()
+    
+    prior_limits_list = get_prior_limit_list(prior_limits)
+    
+    for i in range(theta_torch.shape[1]):
+        prior_interval = prior_limits_list[i]
+        theta_torch2[:, i] = (theta_torch2[:, i] - np.mean(prior_interval))/(prior_interval[1]-prior_interval[0])
+    
+    return theta_torch2
+
+def rescale_theta_inv(theta_torch, prior_limits):
+    theta_torch2 = theta_torch.clone()
+    
+    prior_limits_list = get_prior_limit_list(prior_limits)
+    
+    for i in range(theta_torch.shape[1]):
+        prior_interval = prior_limits_list[i]
+        theta_torch2[:, i] = theta_torch2[:, i]*(prior_interval[1]-prior_interval[0]) + np.mean(prior_interval)
+    return theta_torch2
+
 
 def statistics_from_file(max_files_to_analyze=10):
     folders_inside_statistics = os.listdir("SummaryStatistics")
@@ -454,4 +650,128 @@ def statistics_from_file(max_files_to_analyze=10):
     for file in statistics_files:
         with open(os.path.join("SummaryStatistics", file), "rb") as f:
             yield pickle.load(f)
+
+
+def get_mode(x):
+    hist, bin_edges = np.histogram(x, bins=int(np.sqrt(len(x))))
+    max_index = np.argmax(hist)
+    mode = (bin_edges[max_index] + bin_edges[max_index+1])/2
+    return mode
+
+def get_credibility_interval(single_sigma_posterior, c_level):
+    pdf = np.sort(single_sigma_posterior)
+    cdf = np.arange(1, len(pdf) + 1) / len(pdf)
+    alpha = (1-c_level)/2
+    region = pdf[(cdf > alpha) & (cdf < 1-alpha)]
+    return region[0], region[-1]
+
+# Compute the mean and mode of the posterior for each parameter
+def get_centroids_from_samples(samples, std=False):
+    mean_params = np.array([])
+    mode_params = np.array([])
+    std_params = np.array([])
+
+    for i in range(5):
+        # Retrive the samples for the parameter i
+        params = samples[:,i].numpy()
+        # Compute the mean
+        mean_params = np.concatenate((mean_params, [np.mean(params)]))
+        # Compute the mode
+        hist, bin_edges = np.histogram(params, bins=int(np.sqrt(params.shape[0])))
+        max_index = np.argmax(hist)
+        mode = (bin_edges[max_index] + bin_edges[max_index+1])/2
+        mode_params = np.concatenate((mode_params, [mode]))
+        # Compute the std
+        if std: std_params = np.concatenate((std_params, [np.std(params)]))
+
+    mean_params = mean_params.reshape(5, 1)
+    mode_params = mode_params.reshape(5, 1)
+    if std: std_params = std_params.reshape(5, 1)
+    
+    if std: return mean_params, mode_params, std_params
+    return mean_params, mode_params
+
+# Compare theoretical entropy with the one computed from the posterior
+def CompareTheoreticalSigma(posterior, n_trials, n_samples, selected_stats, return_theta=False, 
+                            prior_limits={"mu_y":[1e4,140e4],"k_y":[1.5e-2,30e-2],"k_int":[1e-3,6e-3],"tau":[2e-2,20e-2],"eps":[0.5,6],}, 
+                            dt=1e-6, DeltaT=1/25e3, TotalT=13, transient=3,
+                            z_score=False, cl_lin=-1, cl_log=-1, fit_corr=False, fit_s_redx=False):
+    n_trials = int(n_trials)
+    n_samples = int(n_samples)
+
+    # Make n_trials simulations
+    theta_true, theta_torch_true = get_theta_from_prior(prior_limits, n_trials)
+    x_trace_true, y_trace_true, f_trace_true = Simulator_noGPU(dt, DeltaT, TotalT, theta_true, transient_time=transient)
+
+    sigma_true = ComputeTheoreticalEntropy(theta_true)[0]
+    sigma_posterior = np.zeros((n_trials, n_samples))
+
+    # Infer the posterior
+    for i in range(n_trials):
+        print("Making the statistics: i = ", i+1, " / ", n_trials, end="\r")
+        summary_stats_true = compute_summary_statistics(x_trace_true[i], theta_true[:, i])
+        s_true = select_summary_statistics(summary_stats_true, selected_stats, DeltaT, 
+                    z_score=z_score, cl_lin=cl_lin, cl_log=cl_log, fit_cxx=fit_corr, fit_s_redx=fit_s_redx)
+        rescaled_samples = posterior.sample((n_samples,), x=s_true, show_progress_bars=False)
+        samples = rescale_theta_inv(rescaled_samples, prior_limits)
+
+        sigma_samples = ComputeTheoreticalEntropy(samples.numpy().T)[0]
+        sigma_posterior[i, :] = sigma_samples[:, 0]
+
+    if return_theta == False: return sigma_true, sigma_posterior
+    if return_theta == True: return sigma_true, sigma_posterior, theta_true
+
+
+# def stat_fit_sredx(sredx, t, t_corr, function = None):
+#     if function is None:
+#         def function(x, a, b, c, d):
+#             return 1e4*(a*np.exp(-b*x) + c/x + d)
+        
+#     if len(sredx.shape) == 1:
+#         n_sim = 1
+#     else:
+#         n_sim = np.min(sredx.shape)
+        
+#     t = t[(t>0)*(t<t_corr)]
+#     sredx_fit = np.zeros((n_sim, 4))
+#     if n_sim != 1:
+#         for i in np.arange(n_sim):
+#             popt, _ = curve_fit(function, t, sredx[i], p0 = [1.,1.,1.,1.],maxfev=1000000, bounds=([-10,0,0,0],[10,np.inf,np.inf,np.inf]))
+#             sredx_fit[i] = popt
+#     else:
+#         popt, _ = curve_fit(function, t, sredx, p0 = [1.,1.,1.,1.],maxfev=1000000)
+#         sredx_fit[0] = popt
+        
+#     return sredx_fit, t
+
+
+
+# def stat_fit_cxx(Cxx, t, t_corr = 0, function = None):
+#     """
+#     Fit an exponential function to the autocorrelation functions with formula a*exp(-b*x)
+#     """
+#     if len(Cxx.shape) == 1:
+#         n_sim = 1
+#     else:
+#         n_sim = np.min(Cxx.shape)
+#     if function is None:
+#         def function(x, a, b):
+#             return a * np.exp(-b * x)
+    
+#     output = np.zeros((Cxx.shape[0], 2))
+#     dt = t[1] - t[0]
+#     if t_corr != 0:
+#         t = t[(t>0)*(t<t_corr)]
+    
+#     if n_sim != 1:
+#         for i in np.arange(n_sim):
+#             popt, pcov = curve_fit(function, t, Cxx[i,:])
+#             output[i,:] = popt
+#     else:
+#         x = np.arange(0,Cxx.shape[1]*dt, dt)
+#         popt, pcov = curve_fit(function, x, Cxx[0,:])
+#         output[0,:] = popt
+        
+#     return output
+
 
