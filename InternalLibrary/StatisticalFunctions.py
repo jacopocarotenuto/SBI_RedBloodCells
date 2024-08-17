@@ -582,6 +582,12 @@ def select_summary_statistics(summary_statistics, selected_statistics, DeltaT,
         theta_selected = True
         selected_statistics.remove("theta")
 
+    # Handle the case with only theta
+    if theta_selected and (len(selected_statistics) == 0):
+        selected_summary_statistics = torch.tensor(summary_statistics["theta"]).T
+        selected_summary_statistics = selected_summary_statistics.to(torch.float32)
+        return selected_summary_statistics
+
     # Get the selected summary statistics in a torch tensor
     if z_score:
         list_of_statistics = [torch.tensor(zscore(summary_statistics[i])) for i in selected_statistics]
