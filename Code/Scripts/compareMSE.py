@@ -120,6 +120,12 @@ def helperComparison(theta_tot_norm, s_tot, n_trials):
         posterior = infer.build_posterior(density_estimator)
         sigma_true, sigma_posterior = CompareTheoreticalSigma(posterior, 10, 1e5, return_theta=False,
                   selected_stats=selected_stats, cl_log=5)
+        # Check for negative values (failed fit)
+        failed_trials = np.all(sigma_posterior < 0, axis=1)
+        if np.sum(failed_trials) > 0: print(np.sum(failed_trials))
+        sigma_true = sigma_true[~failed_trials]
+        sigma_posterior = sigma_posterior[~failed_trials]
+        # Do the actual comparison
         mean_array = np.mean(sigma_posterior, axis=1)
         mode_array = np.array([get_mode(sigma_posterior[i]) for i in range(len(sigma_true))])
         mse_mean[i] = np.mean((sigma_true.reshape(sigma_true.shape[0])-mean_array)**2)

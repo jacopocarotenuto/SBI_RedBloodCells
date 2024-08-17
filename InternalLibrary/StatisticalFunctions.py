@@ -710,6 +710,9 @@ def CompareTheoreticalSigma(posterior, n_trials, n_samples, selected_stats, retu
         summary_stats_true = compute_summary_statistics(x_trace_true[i], theta_true[:, i])
         s_true = select_summary_statistics(summary_stats_true, selected_stats, DeltaT, 
                     z_score=z_score, cl_lin=cl_lin, cl_log=cl_log, fit_cxx=fit_corr, fit_s_redx=fit_s_redx)
+        if s_true is None: # This is meant to handle failed fit
+            sigma_posterior[i, :] = -1
+            break
         rescaled_samples = posterior.sample((n_samples,), x=s_true, show_progress_bars=False)
         samples = rescale_theta_inv(rescaled_samples, prior_limits)
 
