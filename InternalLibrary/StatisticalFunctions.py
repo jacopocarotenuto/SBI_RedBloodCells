@@ -582,6 +582,12 @@ def select_summary_statistics(summary_statistics, selected_statistics, DeltaT,
         theta_selected = True
         selected_statistics.remove("theta")
 
+    # Handle the case with only theta
+    if theta_selected and (len(selected_statistics) == 0):
+        selected_summary_statistics = torch.tensor(summary_statistics["theta"]).T
+        selected_summary_statistics = selected_summary_statistics.to(torch.float32)
+        return selected_summary_statistics
+
     # Get the selected summary statistics in a torch tensor
     if z_score:
         list_of_statistics = [torch.tensor(zscore(summary_statistics[i])) for i in selected_statistics]
@@ -704,6 +710,9 @@ def CompareTheoreticalSigma(posterior, n_trials, n_samples, selected_stats, retu
         summary_stats_true = compute_summary_statistics(x_trace_true[i], theta_true[:, i])
         s_true = select_summary_statistics(summary_stats_true, selected_stats, DeltaT, 
                     z_score=z_score, cl_lin=cl_lin, cl_log=cl_log, fit_cxx=fit_corr, fit_s_redx=fit_s_redx)
+        if s_true is None: # This is meant to handle failed fit
+            sigma_posterior[i, :] = -1
+            break
         rescaled_samples = posterior.sample((n_samples,), x=s_true, show_progress_bars=False)
         samples = rescale_theta_inv(rescaled_samples, prior_limits)
 
