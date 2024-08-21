@@ -1,0 +1,22 @@
+Parameters: [120, ('s_red2', 'Cxx'), 5e-05, 1000, 20]
+Loss: -1.4707424926757813
+Parameters: [120, ('s_red2', 'Cxx'), 5e-05, 1000, 20]
+Loss: -1.4561542358398438
+Parameters: [100, ('s_redx_cl_log',), 0.005, 50, 10]
+Loss: -1.1264668322832156
+Parameters: [-1, ('Cxx_cl_lin', 's_redx_cl_lin'), 0.0005, 1000, 10]
+Loss: -1.74285986328125
+Parameters: [120, ('Cxx', 's_redx'), 5e-05, 20, 50]
+Loss: -1.4874720377080581
+Parameters: [100, ('s_red2', 'Cxx'), 0.0005, 500, 20]
+Loss: -1.6662298177083332
+Parameters: [120, ('Cxx', 's_redx', 'tucci'), 5e-05, 20, 10]
+Loss: -1.366476485108127
+Parameters: [75, ('tucci',), 0.005, 20, 10]
+Loss: -0.713963851091024
+Parameters: [75, ('s_redx_cl_log',), 0.0005, 1000, 10]
+Loss: -0.5673741455078125
+Parameters: [120, ('ts_psdx', 'tucci'), 0.005, 1000, 20]
+Loss: -3.90030224609375
+Parameters: [75, ('Cxx', 's_redx'), 5e-05, 500, 10]
+Loss: -1.188241455078125
