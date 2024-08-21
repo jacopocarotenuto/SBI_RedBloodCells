@@ -47,9 +47,6 @@ prior_limits = {
 }
 
 
-
-
-
 def helperLoad(selected_stats):
     z_score = False # z-score normalization of the summary statistics
     cl_log = 5 # post-subsampling of Cxx and s_redx (-1 for no post-subsampling)
@@ -134,30 +131,53 @@ def helperComparison(theta_tot_norm, s_tot, n_trials):
     return nn_performance, mse_mean, mse_mode
 
 
-## Here the script ##
 results = {}
-selected_stats_set = [["theta"], ["tucci", "ts_psdx"], ["tucci"],
-                      ["Cxx"], ["Cxx_fit"], ["Cxx", "tucci"], ["s_redx", "tucci"],
-                      ["s_redx"], ["s_redx_fit"],
-                      ["s_redx", "Cxx"], ["s_redx_fit", "Cxx_fit"], ["s_redx_fit", "Cxx"],
-                      ["s_redx", "Cxx_fit"]] 
+selected_stats_set = [["Cxx"], ["Cxx", "s_redx"]]
+sample_sizes = [5_000, 10_000, 15_000, 20_000, 25_000, 30_000, 35_000, 40_000]
 
-print("Starting to scan summary statistics...")
 results["stats"] = selected_stats_set
+results["sizes"] = sample_sizes
+
+print("Stating the routine")
 for i in range(len(selected_stats_set)):
     selected_stats = selected_stats_set[i]
     print("\n Starting ", selected_stats)
+
+    # Load the full dataset
     theta_tot, s_tot = helperLoad(selected_stats)
-
     theta_tot_norm = rescale_theta(theta_tot, prior_limits)
+    max_idx = theta_tot.shape[0]
 
-    prior_box = utils.torchutils.BoxUniform(low=torch.tensor([-0.5]*len(prior_limits)), high=torch.tensor([0.5]*len(prior_limits)))
-    prior, num_parameters, prior_returns_numpy = process_prior(prior_box)
+    # Initialize the arrays for the results
+    nn_perf_array = np.zeros((len(sample_sizes)))
+    mse_mean_array = np.zeros((len(sample_sizes)))
+    mse_mode_array = np.zeros((len(sample_sizes)))
 
-    nn_performance, mse_mean, mse_mode = helperComparison(theta_tot_norm, s_tot, n_trials=5)
+    for s in range(len(sample_sizes)): 
+        size = sample_sizes[s]
+        # Sample the dataset
+        indeces = torch.randint(0, max_idx, (size,))
+        theta_tot_norm_sub = theta_tot_norm[indeces]
+        s_tot_sub = s_tot[indeces]
 
-    results[i] = [nn_performance, mse_mean, mse_mode]
+        # SBI routine
+        prior_box = utils.torchutils.BoxUniform(low=torch.tensor([-0.5]*len(prior_limits)), high=torch.tensor([0.5]*len(prior_limits)))
+        prior, num_parameters, prior_returns_numpy = process_prior(prior_box)
+
+        nn_performance, mse_mean, mse_mode = helperComparison(theta_tot_norm_sub, s_tot_sub, n_trials=1)
+
+        # Save results into the array
+        nn_perf_array[s] = nn_performance[0]
+        mse_mean_array[s] = mse_mean[0]
+        mse_mode_array[s] = mse_mode[0]
+
+    # Save the results
+    results[i] = [nn_perf_array, mse_mean_array, mse_mode_array]
 
 
-with open("comparisonMSE3.pkl", 'wb') as f:
+with open("comparisonSampleSize.pkl", 'wb') as f:
     pickle.dump(results, f)
+
+
+    
+
