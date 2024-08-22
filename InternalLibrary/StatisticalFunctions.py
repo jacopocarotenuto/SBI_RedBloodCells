@@ -473,6 +473,9 @@ def stat_fit_corr(single_corr, DeltaT):
 
 
 def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, TotalT = 10):
+    """
+    Compute the implemented summary statistics for a single trace and save them in a dictionary. 
+    """
     summary_statistics = {}
     t = np.linspace(0., TotalT, single_x_trace.shape[0])
     t_corr = TotalT/20 # Hyperparameter
@@ -528,6 +531,22 @@ def compute_summary_statistics(single_x_trace, single_theta, DeltaT = 1/25e3, To
 
 def select_summary_statistics(summary_statistics, selected_statistics, DeltaT,
                               z_score=False, cl_lin=-1, cl_log=-1, fit_cxx=False, fit_s_redx=False):
+    """
+    Select the summary statistics to be used for inference. 
+    This function also allows to performe postprocessing on the summary statistics.
+    You can select "theta" for testing reasons.
+    
+    INPUTS:
+    summary_statistics: dictionary with the summary statistics of a single trace
+    selected_statistics: list with the selected statistics
+    DeltaT: sampling time
+    z_score: boolean to z-score the summary statistics (each of them independently)
+    cl_lin: number of points to subsample Cxx and s_redx linearly
+    cl_log: number of points to subsample Cxx and s_redx logarithmically
+    fit_cxx: boolean to fit the Cxx ex post
+    fit_s_redx: boolean to fit the s_redx ex post
+    """
+    
     selected_statistics = selected_statistics.copy()
     
     # Check that the selected statistics are in the summary statistics
@@ -576,7 +595,7 @@ def select_summary_statistics(summary_statistics, selected_statistics, DeltaT,
     if ("Cxx_fit" in selected_statistics) and (summary_statistics["Cxx_fit"].all() == 0):
         return None
 
-    # Check if theta is selected for testing reasons
+    # Check if theta is selected (for testing reasons)
     theta_selected = False
     if "theta" in selected_statistics:
         theta_selected = True
@@ -609,6 +628,9 @@ def select_summary_statistics(summary_statistics, selected_statistics, DeltaT,
 # Helper function to rescale the parameters
 ## Please, note that you need also to change the prior limits in the model
 def rescale_theta(theta_torch, prior_limits):
+    """
+    Rescale the parameters to be in the range [-1, 1]
+    """
     theta_torch2 = theta_torch.clone()
     
     prior_limits_list = get_prior_limit_list(prior_limits)
@@ -620,6 +642,9 @@ def rescale_theta(theta_torch, prior_limits):
     return theta_torch2
 
 def rescale_theta_inv(theta_torch, prior_limits):
+    """
+    Rescale the parameters to be in the original range
+    """
     theta_torch2 = theta_torch.clone()
     
     prior_limits_list = get_prior_limit_list(prior_limits)
@@ -651,20 +676,30 @@ def statistics_from_file(max_files_to_analyze=10):
 
 
 def get_mode(x):
+    """
+    Empirical mode
+    """
     hist, bin_edges = np.histogram(x, bins=int(np.sqrt(len(x))))
     max_index = np.argmax(hist)
     mode = (bin_edges[max_index] + bin_edges[max_index+1])/2
     return mode
 
+
 def get_credibility_interval(single_sigma_posterior, c_level):
+    """
+    Get the credibility interval for the posterior
+    """
     pdf = np.sort(single_sigma_posterior)
     cdf = np.arange(1, len(pdf) + 1) / len(pdf)
     alpha = (1-c_level)/2
     region = pdf[(cdf > alpha) & (cdf < 1-alpha)]
     return region[0], region[-1]
 
-# Compute the mean and mode of the posterior for each parameter
+
 def get_centroids_from_samples(samples, std=False):
+    """
+    Compute the mean and mode of the posterior for each parameter
+    """
     mean_params = np.array([])
     mode_params = np.array([])
     std_params = np.array([])
@@ -689,11 +724,14 @@ def get_centroids_from_samples(samples, std=False):
     if std: return mean_params, mode_params, std_params
     return mean_params, mode_params
 
-# Compare theoretical entropy with the one computed from the posterior
+
 def CompareTheoreticalSigma(posterior, n_trials, n_samples, selected_stats, return_theta=False, 
                             prior_limits={"mu_y":[1e4,140e4],"k_y":[1.5e-2,30e-2],"k_int":[1e-3,6e-3],"tau":[2e-2,20e-2],"eps":[0.5,6],}, 
                             dt=1e-6, DeltaT=1/25e3, TotalT=13, transient=3,
                             z_score=False, cl_lin=-1, cl_log=-1, fit_corr=False, fit_s_redx=False):
+    """
+    Compare the theoretical entropy with the one computed from the posterior
+    """
     n_trials = int(n_trials)
     n_samples = int(n_samples)
 
@@ -710,7 +748,7 @@ def CompareTheoreticalSigma(posterior, n_trials, n_samples, selected_stats, retu
         summary_stats_true = compute_summary_statistics(x_trace_true[i], theta_true[:, i])
         s_true = select_summary_statistics(summary_stats_true, selected_stats, DeltaT, 
                     z_score=z_score, cl_lin=cl_lin, cl_log=cl_log, fit_cxx=fit_corr, fit_s_redx=fit_s_redx)
-        if s_true is None: # This is meant to handle failed fit
+        if s_true is None: # This is meant to handle a failed fit
             sigma_posterior[i, :] = -1
             break
         rescaled_samples = posterior.sample((n_samples,), x=s_true, show_progress_bars=False)
@@ -721,58 +759,3 @@ def CompareTheoreticalSigma(posterior, n_trials, n_samples, selected_stats, retu
 
     if return_theta == False: return sigma_true, sigma_posterior
     if return_theta == True: return sigma_true, sigma_posterior, theta_true
-
-
-# def stat_fit_sredx(sredx, t, t_corr, function = None):
-#     if function is None:
-#         def function(x, a, b, c, d):
-#             return 1e4*(a*np.exp(-b*x) + c/x + d)
-        
-#     if len(sredx.shape) == 1:
-#         n_sim = 1
-#     else:
-#         n_sim = np.min(sredx.shape)
-        
-#     t = t[(t>0)*(t<t_corr)]
-#     sredx_fit = np.zeros((n_sim, 4))
-#     if n_sim != 1:
-#         for i in np.arange(n_sim):
-#             popt, _ = curve_fit(function, t, sredx[i], p0 = [1.,1.,1.,1.],maxfev=1000000, bounds=([-10,0,0,0],[10,np.inf,np.inf,np.inf]))
-#             sredx_fit[i] = popt
-#     else:
-#         popt, _ = curve_fit(function, t, sredx, p0 = [1.,1.,1.,1.],maxfev=1000000)
-#         sredx_fit[0] = popt
-        
-#     return sredx_fit, t
-
-
-
-# def stat_fit_cxx(Cxx, t, t_corr = 0, function = None):
-#     """
-#     Fit an exponential function to the autocorrelation functions with formula a*exp(-b*x)
-#     """
-#     if len(Cxx.shape) == 1:
-#         n_sim = 1
-#     else:
-#         n_sim = np.min(Cxx.shape)
-#     if function is None:
-#         def function(x, a, b):
-#             return a * np.exp(-b * x)
-    
-#     output = np.zeros((Cxx.shape[0], 2))
-#     dt = t[1] - t[0]
-#     if t_corr != 0:
-#         t = t[(t>0)*(t<t_corr)]
-    
-#     if n_sim != 1:
-#         for i in np.arange(n_sim):
-#             popt, pcov = curve_fit(function, t, Cxx[i,:])
-#             output[i,:] = popt
-#     else:
-#         x = np.arange(0,Cxx.shape[1]*dt, dt)
-#         popt, pcov = curve_fit(function, x, Cxx[0,:])
-#         output[0,:] = popt
-        
-#     return output
-
-

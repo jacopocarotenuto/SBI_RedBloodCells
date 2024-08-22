@@ -1,0 +1,5 @@
+# Internal Library
+This is the Python library we develop to make the pipelines coherent, optimized, and easier to read. Most of the functions refer to the Blood Cell model, but can be useful also somewhere else. The library is defined into two files:
+1. ```SimulatorPackage``` containes the simulator for the Blood Cells model, an helper function to check the input of the simulator, and two classes to make the simulator easier to call in the scripts. 
+2. ```StatisticalFunctions``` defines a large number of functions, making the SBI pipeline easier to write and read in the higher level applications. It containes some helper functions to cast the variable types, the definitions of all the summary statistics, and methods to evaluate the performance of our work. </br>
+Moreover, there are two crucial functions, needed to manipulate the traces and the summary statistics: ```compute_summary_statistics()``` and ```select_summary_statistics()```. In particular, the latter has been strengthened to handle a large number of possibilities, making a more dynamic pipeline possible.
