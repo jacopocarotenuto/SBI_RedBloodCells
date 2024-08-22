@@ -11,7 +11,7 @@ from InternalLibrary.StatisticalFunctions import compute_summary_statistics
 import numpy as np
 # Number of wanted simulations
 sims_to_get = int(100) 
-max_files_to_analyze = 80
+max_files_to_analyze = 200
 
 
 
