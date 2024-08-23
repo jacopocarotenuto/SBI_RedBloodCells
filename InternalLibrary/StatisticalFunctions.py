@@ -629,7 +629,7 @@ def select_summary_statistics(summary_statistics, selected_statistics, DeltaT,
 ## Please, note that you need also to change the prior limits in the model
 def rescale_theta(theta_torch, prior_limits):
     """
-    Rescale the parameters to be in the range [-1, 1]
+    Rescale the parameters to be in the range [-0.5, 0.5]
     """
     theta_torch2 = theta_torch.clone()
     
@@ -640,6 +640,7 @@ def rescale_theta(theta_torch, prior_limits):
         theta_torch2[:, i] = (theta_torch2[:, i] - np.mean(prior_interval))/(prior_interval[1]-prior_interval[0])
     
     return theta_torch2
+
 
 def rescale_theta_inv(theta_torch, prior_limits):
     """
