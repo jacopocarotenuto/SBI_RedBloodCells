@@ -133,7 +133,7 @@ def helperComparison(theta_tot_norm, s_tot, n_trials):
 
 results = {}
 selected_stats_set = [["Cxx"], ["Cxx", "s_redx"]]
-sample_sizes = [5_000, 10_000, 15_000, 20_000, 25_000, 30_000, 35_000, 40_000]
+sample_sizes = [5_000, 10_000, 20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000, 90_000]
 
 results["stats"] = selected_stats_set
 results["sizes"] = sample_sizes
